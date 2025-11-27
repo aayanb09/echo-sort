@@ -14,11 +14,15 @@ interface Call {
   uploaded_at: string;
   processed_at: string | null;
   analyses?: {
+    incident_type: string;
     urgency_level: string;
     urgency_score: number;
+    risk_category: string;
     sentiment: string;
     keywords: string[];
     emotional_tone: string;
+    confidence_score: number;
+    flagged_terms: string[];
   }[];
 }
 
@@ -38,11 +42,15 @@ export const CallsTable = () => {
           uploaded_at,
           processed_at,
           analyses (
+            incident_type,
             urgency_level,
             urgency_score,
+            risk_category,
             sentiment,
             keywords,
-            emotional_tone
+            emotional_tone,
+            confidence_score,
+            flagged_terms
           )
         `)
         .order('uploaded_at', { ascending: false });
@@ -163,9 +171,11 @@ export const CallsTable = () => {
               <tr className="border-b border-border text-left">
                 <th className="pb-3 font-medium text-muted-foreground">Filename</th>
                 <th className="pb-3 font-medium text-muted-foreground">Status</th>
+                <th className="pb-3 font-medium text-muted-foreground">Incident</th>
                 <th className="pb-3 font-medium text-muted-foreground">Urgency</th>
-                <th className="pb-3 font-medium text-muted-foreground">Sentiment</th>
-                <th className="pb-3 font-medium text-muted-foreground">Keywords</th>
+                <th className="pb-3 font-medium text-muted-foreground">Risk</th>
+                <th className="pb-3 font-medium text-muted-foreground">Flagged Terms</th>
+                <th className="pb-3 font-medium text-muted-foreground">Confidence</th>
                 <th className="pb-3 font-medium text-muted-foreground">Uploaded</th>
                 <th className="pb-3 font-medium text-muted-foreground">Actions</th>
               </tr>
@@ -175,9 +185,21 @@ export const CallsTable = () => {
                 <tr key={call.id} className="border-b border-border/50">
                   <td className="py-3 text-foreground">{call.filename}</td>
                   <td className="py-3">
-                    <Badge variant="outline" className="border-border">
+                    <Badge 
+                      variant="outline" 
+                      className={`border-border ${
+                        call.status === 'processing' ? 'animate-pulse' : ''
+                      }`}
+                    >
                       {call.status}
                     </Badge>
+                  </td>
+                  <td className="py-3 text-foreground">
+                    {call.analyses && call.analyses.length > 0 ? (
+                      <span className="capitalize">{call.analyses[0].incident_type}</span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </td>
                   <td className="py-3">
                     {call.analyses && call.analyses.length > 0 ? (
@@ -189,10 +211,27 @@ export const CallsTable = () => {
                     )}
                   </td>
                   <td className="py-3 text-foreground">
-                    {call.analyses && call.analyses.length > 0 ? call.analyses[0].sentiment : '-'}
+                    {call.analyses && call.analyses.length > 0 ? (
+                      <span className="capitalize">{call.analyses[0].risk_category}</span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </td>
                   <td className="py-3 text-foreground">
-                    {call.analyses && call.analyses.length > 0 ? call.analyses[0].keywords?.slice(0, 3).join(', ') : '-'}
+                    {call.analyses && call.analyses.length > 0 ? (
+                      <span className="text-sm">
+                        {call.analyses[0].flagged_terms?.slice(0, 3).join(', ') || '-'}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
+                  <td className="py-3 text-muted-foreground">
+                    {call.analyses && call.analyses.length > 0 ? (
+                      <span>{call.analyses[0].confidence_score}%</span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </td>
                   <td className="py-3 text-muted-foreground">
                     {format(new Date(call.uploaded_at), 'MMM dd, HH:mm')}
