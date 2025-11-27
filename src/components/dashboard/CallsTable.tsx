@@ -18,6 +18,8 @@ interface Call {
     urgency_level: string;
     urgency_score: number;
     risk_category: string;
+    anomaly_detected?: boolean;
+    sort_priority?: number;
     sentiment: string;
     keywords: string[];
     emotional_tone: string;
@@ -46,6 +48,8 @@ export const CallsTable = () => {
             urgency_level,
             urgency_score,
             risk_category,
+            anomaly_detected,
+            sort_priority,
             sentiment,
             keywords,
             emotional_tone,
@@ -175,6 +179,8 @@ export const CallsTable = () => {
                 <th className="pb-3 font-medium text-muted-foreground">Urgency</th>
                 <th className="pb-3 font-medium text-muted-foreground">Risk</th>
                 <th className="pb-3 font-medium text-muted-foreground">Flagged Terms</th>
+                <th className="pb-3 font-medium text-muted-foreground">Anomaly</th>
+                <th className="pb-3 font-medium text-muted-foreground">Priority</th>
                 <th className="pb-3 font-medium text-muted-foreground">Confidence</th>
                 <th className="pb-3 font-medium text-muted-foreground">Uploaded</th>
                 <th className="pb-3 font-medium text-muted-foreground">Actions</th>
@@ -197,6 +203,24 @@ export const CallsTable = () => {
                   <td className="py-3 text-foreground">
                     {call.analyses && call.analyses.length > 0 ? (
                       <span className="capitalize">{call.analyses[0].incident_type}</span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
+                  <td className="py-3 text-foreground">
+                    {call.analyses && call.analyses.length > 0 ? (
+                      call.analyses[0].anomaly_detected ? (
+                        <Badge variant="destructive">Anomalous</Badge>
+                      ) : (
+                        <Badge variant="secondary">Normal</Badge>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
+                  <td className="py-3 text-foreground">
+                    {call.analyses && call.analyses.length > 0 ? (
+                      <span>{call.analyses[0].sort_priority ?? '-'}</span>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}

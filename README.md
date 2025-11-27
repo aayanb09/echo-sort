@@ -71,3 +71,52 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+---
+
+## AI model integration (transcription & anomaly detection)
+
+This project includes a serverless function `supabase/functions/process-call` which transcribes audio and analyzes call transcripts using Hugging Face models.
+
+Quick notes:
+
+- The function uses an environment variable `HUGGING_FACE_API_KEY` to authenticate with Hugging Face's Inference and Router endpoints. Make sure you set this secret before deploying.
+- Transcription uses the Whisper model `openai/whisper-large-v2` via the Hugging Face Inference API.
+- Analysis / anomaly detection uses `meta-llama/Llama-2-7b-chat-hf` via the Hugging Face chat completions router. This model is gated — make sure your account has access and the key has inference permissions.
+
+Example Python local usage (transformers) for transcription:
+
+```py
+from transformers import pipeline
+
+pipe = pipeline("automatic-speech-recognition", model="openai/whisper-large-v2")
+result = pipe("my_audio_file.wav")
+print(result["text"])  # transcribed text
+```
+
+Example Python local usage (transformers) for Llama-2 chat-based analysis:
+
+```py
+from huggingface_hub import login
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+login()  # ensure you are logged in or set HF_TOKEN in env
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
+
+# Prepare simple chat message
+messages = [{"role": "user", "content": "Analyze this text and return a JSON with urgency_level and anomaly_detected fields: <TRANSCRIPT_HERE>"}]
+inputs = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=True, return_tensors="pt")
+outputs = model.generate(**inputs, max_new_tokens=200)
+print(tokenizer.decode(outputs[0], skip_special_tokens=True))
+```
+
+If you plan to run models locally, ensure you have access to gated models and follow Hugging Face's license/usage restrictions.
+
+Quick check: to verify the repo has the environment variable set (locally) you can run:
+
+```bash
+# prints whether HUGGING_FACE_API_KEY is set and the models used
+npm run check:ai
+```
+

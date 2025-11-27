@@ -57,8 +57,8 @@ serve(async (req) => {
     // Convert audio to array buffer for Hugging Face API
     const arrayBuffer = await audioData.arrayBuffer();
 
-    // Transcribe with Hugging Face Whisper API v3 (Standard Inference API)
-    const transcribeResponse = await fetch('https://api-inference.huggingface.co/models/openai/whisper-large-v3', {
+    // Transcribe with Hugging Face Whisper API (use whisper-large-v2 as requested)
+    const transcribeResponse = await fetch('https://api-inference.huggingface.co/models/openai/whisper-large-v2', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${huggingFaceApiKey}`,
@@ -88,7 +88,7 @@ serve(async (req) => {
         confidence_score: 90
       });
 
-    // Analyze with Hugging Face Llama-2 via chat completions API
+    // Analyze with Hugging Face Llama-2 via chat completions API (meta-llama/Llama-2-7b-chat-hf)
     const analysisResponse = await fetch('https://router.huggingface.co/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -96,7 +96,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'meta-llama/Llama-3.3-70B-Instruct',
+        model: 'meta-llama/Llama-2-7b-chat-hf',
         messages: [
           {
             role: 'system',
@@ -104,13 +104,15 @@ serve(async (req) => {
           },
           {
             role: 'user',
-            content: `Analyze this police call transcript and return a JSON response with these exact fields:
+            content: `Analyze this police call transcript and return a JSON response (ONLY valid JSON) with these exact fields:
 - incident_type: type of incident (e.g., robbery, domestic disturbance, medical emergency, traffic accident, routine inquiry)
 - urgency_level: one of "low", "medium", "high", "critical"
 - risk_category: one of "safety threat", "routine inquiry", "administrative", "emergency response"
 - summary: short natural-language summary (2-3 sentences)
 - flagged_terms: array of important keywords detected (violence-related, weapon mentions, medical terms, etc.)
 - urgency_score: numeric score from 0-100
+- anomaly_detected: boolean — true if this call is anomalous/unusual based on content, otherwise false
+- sort_priority: numeric score 0-100 that represents sorting priority (higher => process sooner)
 - sentiment: one of "positive", "neutral", "negative", "distressed"
 - sentiment_score: numeric score from 0-100
 - emotional_tone: description of emotional state
@@ -120,7 +122,7 @@ serve(async (req) => {
 
 Transcript: ${transcriptText}
 
-Return ONLY valid JSON with no additional text.`
+Return ONLY valid JSON with no surrounding text or commentary.`
           }
         ],
         temperature: 0.2,
@@ -148,6 +150,8 @@ Return ONLY valid JSON with no additional text.`
       summary: transcriptText.substring(0, 200),
       flagged_terms: [],
       urgency_score: 50,
+      anomaly_detected: false,
+      sort_priority: 50,
       sentiment: 'neutral',
       sentiment_score: 50,
       emotional_tone: 'calm',
@@ -167,6 +171,8 @@ Return ONLY valid JSON with no additional text.`
         urgency_level: analysis.urgency_level,
         urgency_score: analysis.urgency_score,
         risk_category: analysis.risk_category,
+        anomaly_detected: analysis.anomaly_detected ?? false,
+        sort_priority: analysis.sort_priority ?? 50,
         sentiment: analysis.sentiment,
         sentiment_score: analysis.sentiment_score,
         keywords: analysis.keywords,
