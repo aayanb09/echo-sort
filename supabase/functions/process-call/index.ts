@@ -20,7 +20,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const huggingFaceApiKey = Deno.env.get('HUGGING_FACE_API_KEY')!;
+    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
     
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -52,19 +52,41 @@ serve(async (req) => {
       throw new Error('Failed to download audio file');
     }
 
-    console.log('Audio file downloaded, transcribing...');
+    console.log('Audio file downloaded, transcribing with Lovable AI...');
 
-    // Convert audio to array buffer for Hugging Face API
+    // Convert audio to base64 for Lovable AI
     const arrayBuffer = await audioData.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const base64Audio = btoa(String.fromCharCode(...uint8Array));
 
-    // Transcribe with Hugging Face Whisper API using distil-whisper (faster and more reliable)
-    const transcribeResponse = await fetch('https://api-inference.huggingface.co/models/distil-whisper/distil-large-v3', {
+    // Transcribe with Lovable AI using Gemini
+    const transcribeResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${huggingFaceApiKey}`,
-        'Content-Type': 'audio/wav',
+        'Authorization': `Bearer ${lovableApiKey}`,
+        'Content-Type': 'application/json',
       },
-      body: arrayBuffer
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Transcribe this audio recording accurately. Return only the transcription text, nothing else.'
+              },
+              {
+                type: 'input_audio',
+                input_audio: {
+                  data: base64Audio,
+                  format: 'wav'
+                }
+              }
+            ]
+          }
+        ]
+      })
     });
 
     if (!transcribeResponse.ok) {
@@ -74,11 +96,11 @@ serve(async (req) => {
     }
 
     const transcription = await transcribeResponse.json();
-    const transcriptText = transcription.text || '';
+    const transcriptText = transcription.choices?.[0]?.message?.content || '';
     
     console.log('Transcription successful, length:', transcriptText.length);
 
-    console.log('Transcription complete, analyzing...');
+    console.log('Transcription complete, analyzing with Lovable AI...');
 
     // Save transcript
     await supabase
@@ -89,15 +111,15 @@ serve(async (req) => {
         confidence_score: 90
       });
 
-    // Analyze with Hugging Face Llama-2 via chat completions API
-    const analysisResponse = await fetch('https://router.huggingface.co/v1/chat/completions', {
+    // Analyze with Lovable AI using Gemini
+    const analysisResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${huggingFaceApiKey}`,
+        'Authorization': `Bearer ${lovableApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'meta-llama/Llama-3.3-70B-Instruct',
+        model: 'google/gemini-2.5-flash',
         messages: [
           {
             role: 'system',
