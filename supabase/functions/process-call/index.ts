@@ -57,12 +57,11 @@ serve(async (req) => {
     // Convert audio to array buffer for Hugging Face API
     const arrayBuffer = await audioData.arrayBuffer();
 
-    // Transcribe with Hugging Face Whisper API
-    const transcribeResponse = await fetch('https://router.huggingface.co/v1/models/openai/whisper-large-v2', {
+    // Transcribe with Hugging Face Whisper API (Standard Inference API)
+    const transcribeResponse = await fetch('https://api-inference.huggingface.co/models/openai/whisper-large-v2', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${huggingFaceApiKey}`,
-        'Content-Type': 'application/octet-stream',
       },
       body: arrayBuffer
     });
@@ -70,11 +69,11 @@ serve(async (req) => {
     if (!transcribeResponse.ok) {
       const error = await transcribeResponse.text();
       console.error('Transcription error:', error);
-      throw new Error('Transcription failed');
+      throw new Error(`Transcription failed: ${error}`);
     }
 
     const transcription = await transcribeResponse.json();
-    const transcriptText = transcription.text || transcription[0]?.generated_text || '';
+    const transcriptText = transcription.text || '';
 
     console.log('Transcription complete, analyzing...');
 
@@ -87,8 +86,23 @@ serve(async (req) => {
         confidence_score: 90
       });
 
-    // Analyze with Hugging Face Llama-2
-    const analysisPrompt = `You are a call classification assistant. Analyze the following transcript from a police call and return a JSON response with these exact fields:
+    // Analyze with Hugging Face Llama-2 via chat completions API
+    const analysisResponse = await fetch('https://router.huggingface.co/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${huggingFaceApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'meta-llama/Llama-3.3-70B-Instruct',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a call classification assistant. Analyze police call transcripts and return structured JSON responses with incident classification, urgency assessment, and key information extraction.'
+          },
+          {
+            role: 'user',
+            content: `Analyze this police call transcript and return a JSON response with these exact fields:
 - incident_type: type of incident (e.g., robbery, domestic disturbance, medical emergency, traffic accident, routine inquiry)
 - urgency_level: one of "low", "medium", "high", "critical"
 - risk_category: one of "safety threat", "routine inquiry", "administrative", "emergency response"
@@ -104,38 +118,24 @@ serve(async (req) => {
 
 Transcript: ${transcriptText}
 
-Return ONLY valid JSON, no other text.`;
-
-    const analysisResponse = await fetch('https://router.huggingface.co/v1/models/meta-llama/Llama-2-7b-chat-hf', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${huggingFaceApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        inputs: analysisPrompt,
-        parameters: { 
-          temperature: 0.2,
-          max_new_tokens: 512,
-          return_full_text: false
-        }
+Return ONLY valid JSON with no additional text.`
+          }
+        ],
+        temperature: 0.2,
+        max_tokens: 1024
       })
     });
 
     if (!analysisResponse.ok) {
       const error = await analysisResponse.text();
       console.error('Analysis error:', error);
-      throw new Error('Analysis failed');
+      throw new Error(`Analysis failed: ${error}`);
     }
 
     const analysisData = await analysisResponse.json();
-    let analysisText = '';
+    const analysisText = analysisData.choices?.[0]?.message?.content || '';
     
-    if (Array.isArray(analysisData)) {
-      analysisText = analysisData[0]?.generated_text || '';
-    } else {
-      analysisText = analysisData.generated_text || '';
-    }
+    console.log('Raw analysis response:', analysisText);
     
     // Parse JSON response
     const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
