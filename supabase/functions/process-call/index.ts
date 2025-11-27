@@ -57,11 +57,12 @@ serve(async (req) => {
     // Convert audio to array buffer for Hugging Face API
     const arrayBuffer = await audioData.arrayBuffer();
 
-    // Transcribe with Hugging Face Whisper API v3 (Standard Inference API)
-    const transcribeResponse = await fetch('https://api-inference.huggingface.co/models/openai/whisper-large-v3', {
+    // Transcribe with Hugging Face Whisper API using distil-whisper (faster and more reliable)
+    const transcribeResponse = await fetch('https://api-inference.huggingface.co/models/distil-whisper/distil-large-v3', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${huggingFaceApiKey}`,
+        'Content-Type': 'audio/wav',
       },
       body: arrayBuffer
     });
