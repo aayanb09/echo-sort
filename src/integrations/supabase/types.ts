@@ -17,10 +17,14 @@ export type Database = {
       analyses: {
         Row: {
           call_id: string
+          confidence_score: number | null
           created_at: string
           emotional_tone: string | null
+          flagged_terms: string[] | null
           id: string
+          incident_type: string | null
           keywords: string[] | null
+          risk_category: string | null
           sentiment: string | null
           sentiment_score: number | null
           summary: string | null
@@ -30,10 +34,14 @@ export type Database = {
         }
         Insert: {
           call_id: string
+          confidence_score?: number | null
           created_at?: string
           emotional_tone?: string | null
+          flagged_terms?: string[] | null
           id?: string
+          incident_type?: string | null
           keywords?: string[] | null
+          risk_category?: string | null
           sentiment?: string | null
           sentiment_score?: number | null
           summary?: string | null
@@ -43,10 +51,14 @@ export type Database = {
         }
         Update: {
           call_id?: string
+          confidence_score?: number | null
           created_at?: string
           emotional_tone?: string | null
+          flagged_terms?: string[] | null
           id?: string
+          incident_type?: string | null
           keywords?: string[] | null
+          risk_category?: string | null
           sentiment?: string | null
           sentiment_score?: number | null
           summary?: string | null

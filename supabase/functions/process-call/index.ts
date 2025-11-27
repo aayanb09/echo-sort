@@ -20,7 +20,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
+    const huggingFaceApiKey = Deno.env.get('HUGGING_FACE_API_KEY')!;
     
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -54,22 +54,17 @@ serve(async (req) => {
 
     console.log('Audio file downloaded, transcribing...');
 
-    // Convert blob to base64 for Whisper API
+    // Convert audio to array buffer for Hugging Face API
     const arrayBuffer = await audioData.arrayBuffer();
-    const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
-    // Transcribe with Lovable AI (Whisper)
-    const transcribeResponse = await fetch('https://ai.gateway.lovable.dev/v1/audio/transcriptions', {
+    // Transcribe with Hugging Face Whisper API
+    const transcribeResponse = await fetch('https://router.huggingface.co/v1/models/openai/whisper-large-v2', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${huggingFaceApiKey}`,
+        'Content-Type': 'application/octet-stream',
       },
-      body: JSON.stringify({
-        model: 'whisper-1',
-        file: base64Audio,
-        response_format: 'json'
-      })
+      body: arrayBuffer
     });
 
     if (!transcribeResponse.ok) {
@@ -79,62 +74,85 @@ serve(async (req) => {
     }
 
     const transcription = await transcribeResponse.json();
-    const transcriptText = transcription.text;
+    const transcriptText = transcription.text || transcription[0]?.generated_text || '';
 
     console.log('Transcription complete, analyzing...');
 
     // Save transcript
-    const { data: transcript } = await supabase
+    await supabase
       .from('transcripts')
       .insert({
         call_id: callId,
         transcript_text: transcriptText,
-        confidence_score: 95
-      })
-      .select()
-      .single();
+        confidence_score: 90
+      });
 
-    // Analyze with Lovable AI
-    const analysisPrompt = `Analyze this police call transcript and provide:
-1. Urgency level (critical/high/medium/low)
-2. Urgency score (0-100)
-3. Overall sentiment (positive/neutral/negative/distressed)
-4. Sentiment score (0-100)
-5. Top 5 keywords
-6. Main topics discussed
-7. Emotional tone
-8. Brief summary
+    // Analyze with Hugging Face Llama-2
+    const analysisPrompt = `You are a call classification assistant. Analyze the following transcript from a police call and return a JSON response with these exact fields:
+- incident_type: type of incident (e.g., robbery, domestic disturbance, medical emergency, traffic accident, routine inquiry)
+- urgency_level: one of "low", "medium", "high", "critical"
+- risk_category: one of "safety threat", "routine inquiry", "administrative", "emergency response"
+- summary: short natural-language summary (2-3 sentences)
+- flagged_terms: array of important keywords detected (violence-related, weapon mentions, medical terms, etc.)
+- urgency_score: numeric score from 0-100
+- sentiment: one of "positive", "neutral", "negative", "distressed"
+- sentiment_score: numeric score from 0-100
+- emotional_tone: description of emotional state
+- topics: array of main topics discussed
+- keywords: array of top 5 keywords
+- confidence_score: your confidence in this classification (0-100)
 
 Transcript: ${transcriptText}
 
-Respond in JSON format with keys: urgency_level, urgency_score, sentiment, sentiment_score, keywords (array), topics (array), emotional_tone, summary`;
+Return ONLY valid JSON, no other text.`;
 
-    const analysisResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const analysisResponse = await fetch('https://router.huggingface.co/v1/models/meta-llama/Llama-2-7b-chat-hf', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
+        'Authorization': `Bearer ${huggingFaceApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: 'You are an expert law enforcement call analyst. Always respond with valid JSON only.' },
-          { role: 'user', content: analysisPrompt }
-        ],
-        temperature: 0.3
+        inputs: analysisPrompt,
+        parameters: { 
+          temperature: 0.2,
+          max_new_tokens: 512,
+          return_full_text: false
+        }
       })
     });
 
     if (!analysisResponse.ok) {
+      const error = await analysisResponse.text();
+      console.error('Analysis error:', error);
       throw new Error('Analysis failed');
     }
 
     const analysisData = await analysisResponse.json();
-    const analysisText = analysisData.choices[0].message.content;
+    let analysisText = '';
+    
+    if (Array.isArray(analysisData)) {
+      analysisText = analysisData[0]?.generated_text || '';
+    } else {
+      analysisText = analysisData.generated_text || '';
+    }
     
     // Parse JSON response
     const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
-    const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(analysisText);
+    const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : {
+      incident_type: 'unknown',
+      urgency_level: 'medium',
+      risk_category: 'routine inquiry',
+      summary: transcriptText.substring(0, 200),
+      flagged_terms: [],
+      urgency_score: 50,
+      sentiment: 'neutral',
+      sentiment_score: 50,
+      emotional_tone: 'calm',
+      topics: [],
+      keywords: [],
+      confidence_score: 50
+    };
 
     console.log('Analysis complete, saving results...');
 
@@ -143,14 +161,18 @@ Respond in JSON format with keys: urgency_level, urgency_score, sentiment, senti
       .from('analyses')
       .insert({
         call_id: callId,
+        incident_type: analysis.incident_type,
         urgency_level: analysis.urgency_level,
         urgency_score: analysis.urgency_score,
+        risk_category: analysis.risk_category,
         sentiment: analysis.sentiment,
         sentiment_score: analysis.sentiment_score,
         keywords: analysis.keywords,
         topics: analysis.topics,
         emotional_tone: analysis.emotional_tone,
-        summary: analysis.summary
+        summary: analysis.summary,
+        flagged_terms: analysis.flagged_terms,
+        confidence_score: analysis.confidence_score
       });
 
     // Update call status
