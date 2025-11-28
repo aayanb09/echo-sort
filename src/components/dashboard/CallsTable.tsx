@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Activity, Play, Trash2, Download, RefreshCw } from "lucide-react";
+import { Activity, Trash2, Download, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 
 interface Call {
@@ -31,7 +31,6 @@ interface Call {
 export const CallsTable = () => {
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState<Set<string>>(new Set());
 
   const fetchCalls = async () => {
     try {
@@ -92,28 +91,6 @@ export const CallsTable = () => {
       supabase.removeChannel(channel);
     };
   }, []);
-
-  const processCall = async (callId: string) => {
-    setProcessing(prev => new Set(prev).add(callId));
-    
-    try {
-      const { error } = await supabase.functions.invoke('process-call', {
-        body: { callId }
-      });
-
-      if (error) throw error;
-      toast.success("Processing started");
-    } catch (error: any) {
-      console.error('Processing error:', error);
-      toast.error(error.message || "Failed to process call");
-    } finally {
-      setProcessing(prev => {
-        const next = new Set(prev);
-        next.delete(callId);
-        return next;
-      });
-    }
-  };
 
   const deleteCall = async (callId: string) => {
     try {
@@ -207,24 +184,6 @@ export const CallsTable = () => {
                       <span className="text-muted-foreground">-</span>
                     )}
                   </td>
-                  <td className="py-3 text-foreground">
-                    {call.analyses && call.analyses.length > 0 ? (
-                      call.analyses[0].anomaly_detected ? (
-                        <Badge variant="destructive">Anomalous</Badge>
-                      ) : (
-                        <Badge variant="secondary">Normal</Badge>
-                      )
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </td>
-                  <td className="py-3 text-foreground">
-                    {call.analyses && call.analyses.length > 0 ? (
-                      <span>{call.analyses[0].sort_priority ?? '-'}</span>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </td>
                   <td className="py-3">
                     {call.analyses && call.analyses.length > 0 ? (
                       <Badge className={getUrgencyColor(call.analyses[0].urgency_level)}>
@@ -250,6 +209,24 @@ export const CallsTable = () => {
                       <span className="text-muted-foreground">-</span>
                     )}
                   </td>
+                  <td className="py-3 text-foreground">
+                    {call.analyses && call.analyses.length > 0 ? (
+                      call.analyses[0].anomaly_detected ? (
+                        <Badge variant="destructive">Anomalous</Badge>
+                      ) : (
+                        <Badge variant="secondary">Normal</Badge>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
+                  <td className="py-3 text-foreground">
+                    {call.analyses && call.analyses.length > 0 ? (
+                      <span>{call.analyses[0].sort_priority ?? '-'}</span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
                   <td className="py-3 text-muted-foreground">
                     {call.analyses && call.analyses.length > 0 ? (
                       <span>{call.analyses[0].confidence_score}%</span>
@@ -262,16 +239,14 @@ export const CallsTable = () => {
                   </td>
                   <td className="py-3">
                     <div className="flex gap-2">
-                      {call.status === 'pending' && (
-                        <Button
-                          size="sm"
-                          onClick={() => processCall(call.id)}
-                          disabled={processing.has(call.id)}
-                          className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                        >
-                          <Play className="w-4 h-4" />
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => deleteCall(call.id)}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </td>
                 </tr>
