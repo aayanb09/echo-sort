@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       analyses: {
         Row: {
+          anomaly_detected: boolean | null
           call_id: string
           confidence_score: number | null
           created_at: string
@@ -27,12 +28,14 @@ export type Database = {
           risk_category: string | null
           sentiment: string | null
           sentiment_score: number | null
+          sort_priority: number | null
           summary: string | null
           topics: string[] | null
           urgency_level: string
           urgency_score: number | null
         }
         Insert: {
+          anomaly_detected?: boolean | null
           call_id: string
           confidence_score?: number | null
           created_at?: string
@@ -44,12 +47,14 @@ export type Database = {
           risk_category?: string | null
           sentiment?: string | null
           sentiment_score?: number | null
+          sort_priority?: number | null
           summary?: string | null
           topics?: string[] | null
           urgency_level: string
           urgency_score?: number | null
         }
         Update: {
+          anomaly_detected?: boolean | null
           call_id?: string
           confidence_score?: number | null
           created_at?: string
@@ -61,6 +66,7 @@ export type Database = {
           risk_category?: string | null
           sentiment?: string | null
           sentiment_score?: number | null
+          sort_priority?: number | null
           summary?: string | null
           topics?: string[] | null
           urgency_level?: string

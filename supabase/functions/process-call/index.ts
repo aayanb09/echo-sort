@@ -88,23 +88,19 @@ serve(async (req) => {
         confidence_score: 90
       });
 
-    // Analyze with Hugging Face Llama-2 via chat completions API (meta-llama/Llama-2-7b-chat-hf)
-    const analysisResponse = await fetch('https://router.huggingface.co/v1/chat/completions', {
+    // Analyze with Hugging Face Llama-2 via Inference API
+    const analysisResponse = await fetch('https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${huggingFaceApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'meta-llama/Llama-2-7b-chat-hf',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a call classification assistant. Analyze police call transcripts and return structured JSON responses with incident classification, urgency assessment, and key information extraction.'
-          },
-          {
-            role: 'user',
-            content: `Analyze this police call transcript and return a JSON response (ONLY valid JSON) with these exact fields:
+        inputs: `<s>[INST] <<SYS>>
+You are a call classification assistant. Analyze police call transcripts and return structured JSON responses with incident classification, urgency assessment, and key information extraction.
+<</SYS>>
+
+Analyze this police call transcript and return a JSON response (ONLY valid JSON) with these exact fields:
 - incident_type: type of incident (e.g., robbery, domestic disturbance, medical emergency, traffic accident, routine inquiry)
 - urgency_level: one of "low", "medium", "high", "critical"
 - risk_category: one of "safety threat", "routine inquiry", "administrative", "emergency response"
@@ -122,11 +118,12 @@ serve(async (req) => {
 
 Transcript: ${transcriptText}
 
-Return ONLY valid JSON with no surrounding text or commentary.`
-          }
-        ],
-        temperature: 0.2,
-        max_tokens: 1024
+Return ONLY valid JSON with no surrounding text or commentary. [/INST]`,
+        parameters: {
+          temperature: 0.2,
+          max_new_tokens: 1024,
+          return_full_text: false
+        }
       })
     });
 
@@ -137,7 +134,7 @@ Return ONLY valid JSON with no surrounding text or commentary.`
     }
 
     const analysisData = await analysisResponse.json();
-    const analysisText = analysisData.choices?.[0]?.message?.content || '';
+    const analysisText = Array.isArray(analysisData) ? analysisData[0]?.generated_text || '' : analysisData.generated_text || '';
     
     console.log('Raw analysis response:', analysisText);
     
