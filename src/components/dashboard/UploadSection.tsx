@@ -163,55 +163,72 @@ Return ONLY valid JSON with no surrounding text or commentary. [/INST]`;
 
           const callId = callData.id;
 
-          // Transcribe audio
-          toast.info(`Transcribing ${file.name}...`);
-          const transcript = await transcribeAudio(file);
-          
-          // Save transcript
-          await supabase.from('transcripts').insert({
-            call_id: callId,
-            transcript_text: transcript,
-            confidence_score: 90
-          });
+          try {
+            // Transcribe audio
+            toast.info(`Transcribing ${file.name}...`);
+            const transcript = await transcribeAudio(file);
+            console.log('Transcript length:', transcript.length);
+            
+            // Save transcript
+            await supabase.from('transcripts').insert({
+              call_id: callId,
+              transcript_text: transcript,
+              confidence_score: 90
+            });
 
-          // Analyze transcript
-          toast.info(`Analyzing ${file.name}...`);
-          const analysis = await analyzeTranscript(transcript);
+            // Analyze transcript
+            toast.info(`Analyzing ${file.name}...`);
+            const analysis = await analyzeTranscript(transcript);
+            console.log('Analysis:', analysis);
 
-          // Save analysis
-          await supabase.from('analyses').insert({
-            call_id: callId,
-            incident_type: analysis.incident_type || 'unknown',
-            urgency_level: analysis.urgency_level || 'medium',
-            urgency_score: analysis.urgency_score || 50,
-            risk_category: analysis.risk_category || 'routine inquiry',
-            anomaly_detected: analysis.anomaly_detected || false,
-            sort_priority: analysis.sort_priority || 50,
-            sentiment: analysis.sentiment || 'neutral',
-            sentiment_score: analysis.sentiment_score || 50,
-            keywords: analysis.keywords || [],
-            topics: analysis.topics || [],
-            emotional_tone: analysis.emotional_tone || 'calm',
-            summary: analysis.summary || '',
-            flagged_terms: analysis.flagged_terms || [],
-            confidence_score: analysis.confidence_score || 50
-          });
+            // Save analysis
+            await supabase.from('analyses').insert({
+              call_id: callId,
+              incident_type: analysis.incident_type || 'unknown',
+              urgency_level: analysis.urgency_level || 'medium',
+              urgency_score: analysis.urgency_score || 50,
+              risk_category: analysis.risk_category || 'routine inquiry',
+              anomaly_detected: analysis.anomaly_detected || false,
+              sort_priority: analysis.sort_priority || 50,
+              sentiment: analysis.sentiment || 'neutral',
+              sentiment_score: analysis.sentiment_score || 50,
+              keywords: analysis.keywords || [],
+              topics: analysis.topics || [],
+              emotional_tone: analysis.emotional_tone || 'calm',
+              summary: analysis.summary || '',
+              flagged_terms: analysis.flagged_terms || [],
+              confidence_score: analysis.confidence_score || 50
+            });
 
-          // Update call status
-          await supabase
-            .from('calls')
-            .update({ 
-              status: 'completed',
-              processed_at: new Date().toISOString()
-            })
-            .eq('id', callId);
+            // Update call status to completed
+            await supabase
+              .from('calls')
+              .update({ 
+                status: 'completed',
+                processed_at: new Date().toISOString()
+              })
+              .eq('id', callId);
 
-          completed++;
-          setProgress((completed / totalFiles) * 100);
-          toast.success(`Processed ${file.name}`);
+            completed++;
+            setProgress((completed / totalFiles) * 100);
+            toast.success(`Processed ${file.name}`);
+          } catch (processingError: any) {
+            console.error(`Processing error for ${file.name}:`, processingError);
+            
+            // Update call status to failed
+            await supabase
+              .from('calls')
+              .update({ 
+                status: 'failed',
+                processed_at: new Date().toISOString()
+              })
+              .eq('id', callId);
+              
+            toast.error(`Failed to process ${file.name}: ${processingError.message}`);
+          }
         } catch (fileError: any) {
-          console.error(`Error processing ${file.name}:`, fileError);
-          toast.error(`Failed to process ${file.name}: ${fileError.message}`);
+          console.error(`Error with ${file.name}:`, fileError);
+          toast.error(`Failed to upload ${file.name}: ${fileError.message}`);
         }
       }
 
