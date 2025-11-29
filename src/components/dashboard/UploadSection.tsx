@@ -30,20 +30,29 @@ export const UploadSection = () => {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const transcribeAudio = async (audioFile: File) => {
+  const transcribeAudio = async (audioFile: File, filePath: string) => {
     console.log('Starting transcription for:', audioFile.name);
     
     try {
-      console.log('Connecting to Whisper Space...');
-      const client = await Client.connect("CaBeSh/whisperTest");
-      console.log('✓ Whisper client connected');
-      
-      const result = await client.predict("/predict", { 
-        audio: audioFile
+      // Get signed URL for the uploaded file (valid for 1 hour)
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from('call-recordings')
+        .createSignedUrl(filePath, 3600);
+
+      if (urlError || !urlData?.signedUrl) {
+        throw new Error('Failed to create signed URL');
+      }
+
+      console.log('Calling transcription edge function...');
+      const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+        body: { audioUrl: urlData.signedUrl }
       });
+
+      if (error) throw error;
+      if (!data?.text) throw new Error('No transcription text returned');
       
-      console.log('Transcription result:', result);
-      return result.data as string;
+      console.log('Transcription result length:', data.text.length);
+      return data.text;
     } catch (error) {
       console.error('Transcription error:', error);
       throw new Error(`Transcription failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -152,7 +161,7 @@ Return ONLY valid JSON with no surrounding text or commentary. [/INST]`;
           try {
             // Transcribe audio
             toast.info(`Transcribing ${file.name}...`);
-            const transcript = await transcribeAudio(file);
+            const transcript = await transcribeAudio(file, fileName);
             console.log('Transcript length:', transcript.length);
             
             // Save transcript
