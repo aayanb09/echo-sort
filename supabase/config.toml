@@ -2,3 +2,6 @@ project_id = "puebzwtmbhhbebkfuulq"
 
 [functions.process-call]
 verify_jwt = true
+
+[functions.transcribe-audio]
+verify_jwt = false
