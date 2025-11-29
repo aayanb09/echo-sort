@@ -5,8 +5,7 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Upload, FileAudio, X } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-
-const HF_API_KEY = "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";
+import { Client } from "@gradio/client";
 
 export const UploadSection = () => {
   const [files, setFiles] = useState<File[]>([]);
@@ -34,24 +33,21 @@ export const UploadSection = () => {
   const transcribeAudio = async (audioFile: File) => {
     console.log('Starting transcription for:', audioFile.name);
     
-    const arrayBuffer = await audioFile.arrayBuffer();
-    
-    const response = await fetch('https://api-inference.huggingface.co/models/openai/whisper-large-v2', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${HF_API_KEY}`,
-      },
-      body: arrayBuffer
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Transcription failed: ${error}`);
+    try {
+      console.log('Connecting to Whisper Space...');
+      const client = await Client.connect("CaBeSh/whisperTest");
+      console.log('✓ Whisper client connected');
+      
+      const result = await client.predict("/predict", { 
+        audio: audioFile
+      });
+      
+      console.log('Transcription result:', result);
+      return result.data as string;
+    } catch (error) {
+      console.error('Transcription error:', error);
+      throw new Error(`Transcription failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    const result = await response.json();
-    console.log('Transcription result:', result);
-    return result.text || '';
   };
 
   const analyzeTranscript = async (transcript: string) => {
@@ -81,39 +77,29 @@ Transcript: ${transcript}
 
 Return ONLY valid JSON with no surrounding text or commentary. [/INST]`;
 
-    const response = await fetch('https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${HF_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        inputs: prompt,
-        parameters: {
-          temperature: 0.2,
-          max_new_tokens: 1024,
-          return_full_text: false
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Analysis failed: ${error}`);
+    try {
+      console.log('Connecting to Llama Space...');
+      const client = await Client.connect("CaBeSh/llamaTest");
+      console.log('✓ Llama client connected');
+      
+      const result = await client.predict("/predict", { 
+        text: prompt
+      });
+      
+      console.log('Analysis result:', result);
+      const analysisText = result.data as string;
+      
+      // Parse JSON from response
+      const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('Failed to parse analysis response');
+      }
+      
+      return JSON.parse(jsonMatch[0]);
+    } catch (error) {
+      console.error('Analysis error:', error);
+      throw new Error(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    const result = await response.json();
-    console.log('Analysis result:', result);
-    
-    const analysisText = Array.isArray(result) ? result[0]?.generated_text || '' : result.generated_text || '';
-    
-    // Parse JSON from response
-    const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Failed to parse analysis response');
-    }
-    
-    return JSON.parse(jsonMatch[0]);
   };
 
   const uploadFiles = async () => {
