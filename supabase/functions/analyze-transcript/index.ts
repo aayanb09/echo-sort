@@ -44,31 +44,68 @@ Transcript: ${transcript}
 
 Return ONLY valid JSON with no surrounding text or commentary.`;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }],
-          generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: 1024,
-          }
-        })
-      }
-    );
+    // Retry logic with exponential backoff for rate limiting
+    let response;
+    let lastError;
+    const maxRetries = 3;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+          console.log(`Retry attempt ${attempt + 1} after ${delay}ms delay...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Gemini API error:', response.status, errorText);
-      throw new Error(`Gemini API error: ${response.status}`);
+        response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{
+                  text: prompt
+                }]
+              }],
+              generationConfig: {
+                temperature: 0.2,
+                maxOutputTokens: 1024,
+              }
+            })
+          }
+        );
+
+        if (response.ok) {
+          break; // Success, exit retry loop
+        }
+
+        if (response.status === 429) {
+          lastError = 'Rate limit exceeded';
+          if (attempt === maxRetries - 1) {
+            throw new Error('Rate limit exceeded after retries. Please wait a moment and try again.');
+          }
+          continue; // Retry
+        }
+
+        // For other errors, don't retry
+        const errorText = await response.text();
+        console.error('Gemini API error:', response.status, errorText);
+        throw new Error(`Gemini API error: ${response.status}`);
+        
+      } catch (error) {
+        if (attempt === maxRetries - 1) {
+          throw error;
+        }
+        lastError = error;
+      }
+    }
+
+    if (!response || !response.ok) {
+      const errorMessage = lastError instanceof Error ? lastError.message : (typeof lastError === 'string' ? lastError : 'Failed to get response from Gemini API');
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
