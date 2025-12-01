@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Upload, FileAudio, X } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { Client } from "@gradio/client";
 
 export const UploadSection = () => {
   const [files, setFiles] = useState<File[]>([]);
@@ -61,50 +60,17 @@ export const UploadSection = () => {
 
   const analyzeTranscript = async (transcript: string) => {
     console.log('Starting analysis...');
-    
-    const prompt = `<s>[INST] <<SYS>>
-You are a call classification assistant. Analyze police call transcripts and return structured JSON responses with incident classification, urgency assessment, and key information extraction.
-<</SYS>>
-
-Analyze this police call transcript and return a JSON response (ONLY valid JSON) with these exact fields:
-- incident_type: type of incident (e.g., robbery, domestic disturbance, medical emergency, traffic accident, routine inquiry)
-- urgency_level: one of "low", "medium", "high", "critical"
-- risk_category: one of "safety threat", "routine inquiry", "administrative", "emergency response"
-- summary: short natural-language summary (2-3 sentences)
-- flagged_terms: array of important keywords detected (violence-related, weapon mentions, medical terms, etc.)
-- urgency_score: numeric score from 0-100
-- anomaly_detected: boolean — true if this call is anomalous/unusual based on content, otherwise false
-- sort_priority: numeric score 0-100 that represents sorting priority (higher => process sooner)
-- sentiment: one of "positive", "neutral", "negative", "distressed"
-- sentiment_score: numeric score from 0-100
-- emotional_tone: description of emotional state
-- topics: array of main topics discussed
-- keywords: array of top 5 keywords
-- confidence_score: your confidence in this classification (0-100)
-
-Transcript: ${transcript}
-
-Return ONLY valid JSON with no surrounding text or commentary. [/INST]`;
-
     try {
-      console.log('Connecting to Llama Space...');
-      const client = await Client.connect("CaBeSh/llamaTest");
-      console.log('✓ Llama client connected');
-      
-      const result = await client.predict("/predict", { 
-        text: prompt
+      console.log('Calling analysis edge function...');
+      const { data, error } = await supabase.functions.invoke('analyze-transcript', {
+        body: { transcript }
       });
+
+      if (error) throw error;
+      if (!data?.analysis) throw new Error('No analysis data returned');
       
-      console.log('Analysis result:', result);
-      const analysisText = result.data as string;
-      
-      // Parse JSON from response
-      const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('Failed to parse analysis response');
-      }
-      
-      return JSON.parse(jsonMatch[0]);
+      console.log('Analysis complete');
+      return data.analysis;
     } catch (error) {
       console.error('Analysis error:', error);
       throw new Error(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
