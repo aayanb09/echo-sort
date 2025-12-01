@@ -71,7 +71,7 @@ export const CallsTable = () => {
   useEffect(() => {
     fetchCalls();
 
-    // Set up realtime subscription
+    // Set up realtime subscriptions for both calls and analyses
     const channel = supabase
       .channel('calls-changes')
       .on(
@@ -82,6 +82,19 @@ export const CallsTable = () => {
           table: 'calls'
         },
         () => {
+          console.log('Calls table changed, refreshing...');
+          fetchCalls();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'analyses'
+        },
+        () => {
+          console.log('Analyses table changed, refreshing...');
           fetchCalls();
         }
       )
