@@ -7,25 +7,35 @@ import { toast } from "sonner";
 import { Activity, Trash2, Download, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 
+interface Analysis {
+  incident_type: string;
+  urgency_level: string;
+  urgency_score: number;
+  risk_category: string;
+  anomaly_detected?: boolean;
+  sort_priority?: number;
+  sentiment: string;
+  sentiment_score?: number;
+  keywords: string[];
+  topics?: string[];
+  emotional_tone: string;
+  confidence_score: number;
+  flagged_terms: string[];
+  summary?: string;
+}
+
+interface Transcript {
+  transcript_text: string;
+}
+
 interface Call {
   id: string;
   filename: string;
   status: string;
   uploaded_at: string;
   processed_at: string | null;
-  analyses?: {
-    incident_type: string;
-    urgency_level: string;
-    urgency_score: number;
-    risk_category: string;
-    anomaly_detected?: boolean;
-    sort_priority?: number;
-    sentiment: string;
-    keywords: string[];
-    emotional_tone: string;
-    confidence_score: number;
-    flagged_terms: string[];
-  }[];
+  analyses?: Analysis[];
+  transcripts?: Transcript[];
 }
 
 export const CallsTable = () => {
@@ -50,10 +60,16 @@ export const CallsTable = () => {
             anomaly_detected,
             sort_priority,
             sentiment,
+            sentiment_score,
             keywords,
+            topics,
             emotional_tone,
             confidence_score,
-            flagged_terms
+            flagged_terms,
+            summary
+          ),
+          transcripts (
+            transcript_text
           )
         `)
         .order('uploaded_at', { ascending: false });
@@ -117,6 +133,46 @@ export const CallsTable = () => {
     } catch (error: any) {
       toast.error(error.message || "Failed to delete call");
     }
+  };
+
+  const downloadResults = (call: Call) => {
+    const analysis = call.analyses?.[0];
+    const transcript = call.transcripts?.[0];
+    
+    const results = {
+      filename: call.filename,
+      uploaded_at: call.uploaded_at,
+      processed_at: call.processed_at,
+      status: call.status,
+      transcript: transcript?.transcript_text || null,
+      analysis: analysis ? {
+        incident_type: analysis.incident_type,
+        urgency_level: analysis.urgency_level,
+        urgency_score: analysis.urgency_score,
+        risk_category: analysis.risk_category,
+        anomaly_detected: analysis.anomaly_detected,
+        sort_priority: analysis.sort_priority,
+        sentiment: analysis.sentiment,
+        sentiment_score: analysis.sentiment_score,
+        keywords: analysis.keywords,
+        topics: analysis.topics,
+        emotional_tone: analysis.emotional_tone,
+        confidence_score: analysis.confidence_score,
+        flagged_terms: analysis.flagged_terms,
+        summary: analysis.summary
+      } : null
+    };
+
+    const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${call.filename.replace(/\.[^/.]+$/, '')}-analysis.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Results downloaded");
   };
 
   const getUrgencyColor = (level: string) => {
@@ -252,11 +308,23 @@ export const CallsTable = () => {
                   </td>
                   <td className="py-3">
                     <div className="flex gap-2">
+                      {call.status === 'completed' && call.analyses && call.analyses.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => downloadResults(call)}
+                          className="text-primary hover:text-primary hover:bg-primary/10"
+                          title="Download results"
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => deleteCall(call.id)}
                         className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        title="Delete call"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
