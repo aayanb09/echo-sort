@@ -4,8 +4,15 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Activity, Trash2, Download, RefreshCw } from "lucide-react";
+import { Activity, Trash2, Download, RefreshCw, HelpCircle } from "lucide-react";
 import { format } from "date-fns";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface Analysis {
   incident_type: string;
@@ -192,6 +199,13 @@ export const CallsTable = () => {
     );
   }
 
+  const getDisplayStatus = (call: Call) => {
+    if (call.analyses && call.analyses.length > 0) {
+      return 'completed';
+    }
+    return call.status;
+  };
+
   return (
     <Card className="p-6 bg-card border-border">
       <div className="flex items-center justify-between mb-4">
@@ -199,15 +213,56 @@ export const CallsTable = () => {
           <Activity className="w-5 h-5 text-primary" />
           <h2 className="text-xl font-bold text-foreground">Call Records</h2>
         </div>
-        <Button
-          onClick={fetchCalls}
-          variant="outline"
-          size="sm"
-          className="border-border"
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="border-border">
+                <HelpCircle className="w-4 h-4 mr-2" />
+                Legend
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Metric Definitions</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 text-sm">
+                <div>
+                  <h4 className="font-semibold text-foreground">Urgency Level</h4>
+                  <p className="text-muted-foreground">Critical = Immediate response needed, High = Urgent attention, Medium = Standard priority, Low = Routine matter</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground">Priority Score (0-100)</h4>
+                  <p className="text-muted-foreground">Higher scores indicate calls that should be processed first. 80+ = Critical, 60-79 = High, 40-59 = Medium, 0-39 = Low</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground">Risk Category</h4>
+                  <p className="text-muted-foreground">Safety Threat = Potential danger, Emergency Response = Requires dispatch, Routine Inquiry = Standard question, Administrative = Non-urgent matter</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground">Anomaly Detection</h4>
+                  <p className="text-muted-foreground">Flags unusual calls that deviate from typical patterns—may warrant extra review</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground">Confidence Score</h4>
+                  <p className="text-muted-foreground">AI's certainty in the analysis. 90%+ = High confidence, 70-89% = Moderate, Below 70% = Review recommended</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-foreground">Flagged Terms</h4>
+                  <p className="text-muted-foreground">Keywords detected that may indicate urgency, violence, weapons, or medical emergencies</p>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button
+            onClick={fetchCalls}
+            variant="outline"
+            size="sm"
+            className="border-border"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {calls.length === 0 ? (
@@ -237,14 +292,19 @@ export const CallsTable = () => {
                 <tr key={call.id} className="border-b border-border/50">
                   <td className="py-3 text-foreground">{call.filename}</td>
                   <td className="py-3">
-                    <Badge 
-                      variant="outline" 
-                      className={`border-border ${
-                        call.status === 'processing' ? 'animate-pulse' : ''
-                      }`}
-                    >
-                      {call.status}
-                    </Badge>
+                    {(() => {
+                      const displayStatus = getDisplayStatus(call);
+                      return (
+                        <Badge 
+                          variant="outline" 
+                          className={`border-border ${
+                            displayStatus === 'processing' ? 'animate-pulse' : ''
+                          } ${displayStatus === 'completed' ? 'border-success text-success' : ''}`}
+                        >
+                          {displayStatus}
+                        </Badge>
+                      );
+                    })()}
                   </td>
                   <td className="py-3 text-foreground">
                     {call.analyses && call.analyses.length > 0 ? (
@@ -308,7 +368,7 @@ export const CallsTable = () => {
                   </td>
                   <td className="py-3">
                     <div className="flex gap-2">
-                      {call.status === 'completed' && call.analyses && call.analyses.length > 0 && (
+                      {call.analyses && call.analyses.length > 0 && (
                         <Button
                           size="sm"
                           variant="ghost"

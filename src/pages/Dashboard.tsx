@@ -57,8 +57,8 @@ const Dashboard = () => {
               <AlertCircle className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Call Analysis Platform</h1>
-              <p className="text-xs text-muted-foreground">Operation Control</p>
+              <h1 className="text-xl font-bold text-foreground">Salus Connect</h1>
+              <p className="text-xs text-muted-foreground">Call Analysis Platform</p>
             </div>
           </div>
 
