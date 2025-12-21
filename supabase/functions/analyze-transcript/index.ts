@@ -72,7 +72,8 @@ Return ONLY valid JSON with no surrounding text or commentary.`;
               }],
               generationConfig: {
                 temperature: 0.2,
-                maxOutputTokens: 1024,
+                maxOutputTokens: 2048,
+                responseMimeType: 'application/json',
               }
             })
           }
@@ -113,13 +114,22 @@ Return ONLY valid JSON with no surrounding text or commentary.`;
     
     console.log('Raw Gemini response:', generatedText);
 
-    // Parse JSON from response
-    const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No valid JSON found in Gemini response');
-    }
+    // Parse JSON from response (handle code fences / extra text)
+    let raw = String(generatedText ?? '').trim();
+    raw = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
 
-    const analysis = JSON.parse(jsonMatch[0]);
+    let analysis: Record<string, unknown>;
+    try {
+      analysis = JSON.parse(raw);
+    } catch {
+      const start = raw.indexOf('{');
+      const end = raw.lastIndexOf('}');
+      if (start !== -1 && end !== -1 && end > start) {
+        analysis = JSON.parse(raw.slice(start, end + 1));
+      } else {
+        throw new Error(`No valid JSON found in Gemini response`);
+      }
+    }
     
     console.log('Analysis complete');
 
