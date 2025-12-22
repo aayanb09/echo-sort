@@ -11,19 +11,51 @@ export const UploadSection = () => {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
   const cancelledRef = useRef(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(e.target.files || []);
-    const audioFiles = selectedFiles.filter(file => 
+  const filterAudioFiles = (fileList: File[]) => {
+    const audioFiles = fileList.filter(file => 
       file.type.startsWith('audio/') || 
       file.name.match(/\.(mp3|wav|m4a|ogg|webm)$/i)
     );
 
-    if (audioFiles.length !== selectedFiles.length) {
+    if (audioFiles.length !== fileList.length) {
       toast.error("Some files were not audio files and were filtered out");
     }
 
+    return audioFiles;
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    const audioFiles = filterAudioFiles(selectedFiles);
+    setFiles(prev => [...prev, ...audioFiles]);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!uploading) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (uploading) return;
+
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    const audioFiles = filterAudioFiles(droppedFiles);
     setFiles(prev => [...prev, ...audioFiles]);
   };
 
@@ -251,7 +283,16 @@ export const UploadSection = () => {
           </p>
         </div>
 
-        <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors">
+        <div 
+          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+            isDragging 
+              ? 'border-primary bg-primary/5' 
+              : 'border-border hover:border-primary/50'
+          } ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <input
             type="file"
             id="file-upload"
@@ -263,9 +304,9 @@ export const UploadSection = () => {
           />
           <label
             htmlFor="file-upload"
-            className="cursor-pointer flex flex-col items-center gap-2"
+            className={`flex flex-col items-center gap-2 ${uploading ? 'cursor-not-allowed' : 'cursor-pointer'}`}
           >
-            <Upload className="h-12 w-12 text-muted-foreground" />
+            <Upload className={`h-12 w-12 transition-colors ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
             <div className="text-sm">
               <span className="font-medium text-primary hover:underline">
                 Click to upload
