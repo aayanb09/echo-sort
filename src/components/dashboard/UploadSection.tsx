@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Upload, FileAudio, X } from "lucide-react";
+import { Upload, FileAudio, X, Square } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
 export const UploadSection = () => {
@@ -11,6 +11,7 @@ export const UploadSection = () => {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
+  const cancelledRef = useRef(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
@@ -78,12 +79,19 @@ export const UploadSection = () => {
     }
   };
 
+  const cancelUpload = () => {
+    cancelledRef.current = true;
+    setProgressLabel("Cancelling...");
+    toast.info("Cancelling upload after current file...");
+  };
+
   const uploadFiles = async () => {
     if (files.length === 0) {
       toast.error("Please select at least one audio file");
       return;
     }
 
+    cancelledRef.current = false;
     setUploading(true);
     setProgress(0);
 
@@ -99,6 +107,12 @@ export const UploadSection = () => {
       const stageWeight = progressPerFile / 3;
 
       for (const file of files) {
+        // Check for cancellation before starting each file
+        if (cancelledRef.current) {
+          toast.info(`Cancelled. Processed ${completed} of ${totalFiles} file(s).`);
+          break;
+        }
+
         const fileIndex = completed;
         const baseProgress = fileIndex * progressPerFile;
         
@@ -212,10 +226,13 @@ export const UploadSection = () => {
         }
       }
 
-      setProgressLabel("Complete!");
-      toast.success(`Completed processing ${completed} of ${totalFiles} file(s)`);
+      if (!cancelledRef.current) {
+        setProgressLabel("Complete!");
+        toast.success(`Completed processing ${completed} of ${totalFiles} file(s)`);
+      }
       setFiles([]);
       setProgress(0);
+      setProgressLabel("");
     } catch (error: any) {
       console.error('Upload error:', error);
       toast.error(error.message || "Upload failed");
@@ -301,13 +318,25 @@ export const UploadSection = () => {
           </div>
         )}
 
-        <Button
-          onClick={uploadFiles}
-          disabled={files.length === 0 || uploading}
-          className="w-full"
-        >
-          {uploading ? "Processing..." : `Upload ${files.length} File${files.length !== 1 ? 's' : ''}`}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={uploadFiles}
+            disabled={files.length === 0 || uploading}
+            className="flex-1"
+          >
+            {uploading ? "Processing..." : `Upload ${files.length} File${files.length !== 1 ? 's' : ''}`}
+          </Button>
+          {uploading && (
+            <Button
+              onClick={cancelUpload}
+              variant="destructive"
+              disabled={cancelledRef.current}
+            >
+              <Square className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+          )}
+        </div>
       </div>
     </Card>
   );
