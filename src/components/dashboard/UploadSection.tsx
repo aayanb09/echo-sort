@@ -10,6 +10,7 @@ export const UploadSection = () => {
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState("");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
@@ -93,19 +94,31 @@ export const UploadSection = () => {
       const totalFiles = files.length;
       let completed = 0;
 
+      // Each file has 3 stages: upload (33%), transcribe (33%), analyze (34%)
+      const progressPerFile = 100 / totalFiles;
+      const stageWeight = progressPerFile / 3;
+
       for (const file of files) {
+        const fileIndex = completed;
+        const baseProgress = fileIndex * progressPerFile;
+        
         try {
           console.log(`Processing file ${completed + 1}/${totalFiles}: ${file.name}`);
+          
+          // Stage 1: Upload
+          setProgressLabel(`Uploading ${file.name}...`);
+          setProgress(baseProgress + stageWeight * 0.5);
           
           const fileExt = file.name.split('.').pop();
           const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
           
-          // Upload to storage
           const { error: uploadError } = await supabase.storage
             .from('call-recordings')
             .upload(fileName, file);
 
           if (uploadError) throw uploadError;
+          
+          setProgress(baseProgress + stageWeight);
 
           // Create call record
           const { data: callData, error: dbError } = await supabase
@@ -125,10 +138,14 @@ export const UploadSection = () => {
           const callId = callData.id;
 
           try {
-            // Transcribe audio
-            toast.info(`Transcribing ${file.name}...`);
+            // Stage 2: Transcribe
+            setProgressLabel(`Transcribing ${file.name}...`);
+            setProgress(baseProgress + stageWeight * 1.5);
+            
             const transcript = await transcribeAudio(file, fileName);
             console.log('Transcript length:', transcript.length);
+            
+            setProgress(baseProgress + stageWeight * 2);
             
             // Save transcript
             await supabase.from('transcripts').insert({
@@ -137,8 +154,10 @@ export const UploadSection = () => {
               confidence_score: 90
             });
 
-            // Analyze transcript
-            toast.info(`Analyzing ${file.name}...`);
+            // Stage 3: Analyze
+            setProgressLabel(`Analyzing ${file.name}...`);
+            setProgress(baseProgress + stageWeight * 2.5);
+            
             const analysis = await analyzeTranscript(transcript);
             console.log('Analysis:', analysis);
 
@@ -171,7 +190,7 @@ export const UploadSection = () => {
               .eq('id', callId);
 
             completed++;
-            setProgress((completed / totalFiles) * 100);
+            setProgress(completed * progressPerFile);
             toast.success(`Processed ${file.name}`);
           } catch (processingError: any) {
             console.error(`Processing error for ${file.name}:`, processingError);
@@ -193,6 +212,7 @@ export const UploadSection = () => {
         }
       }
 
+      setProgressLabel("Complete!");
       toast.success(`Completed processing ${completed} of ${totalFiles} file(s)`);
       setFiles([]);
       setProgress(0);
@@ -274,10 +294,10 @@ export const UploadSection = () => {
         {uploading && (
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span>Processing files...</span>
-              <span>{Math.round(progress)}%</span>
+              <span className="text-muted-foreground">{progressLabel || "Starting..."}</span>
+              <span className="font-medium">{Math.round(progress)}%</span>
             </div>
-            <Progress value={progress} />
+            <Progress value={progress} className="h-2" />
           </div>
         )}
 
