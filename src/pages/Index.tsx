@@ -68,7 +68,7 @@ const Index = () => {
               </div>
               <h3 className="text-lg font-bold text-foreground">Smart Transcription</h3>
               <p className="text-sm text-muted-foreground">
-                Whisper-powered transcription converts audio to searchable text with high accuracy.
+                AI-powered transcription converts audio to searchable text with high accuracy.
               </p>
             </div>
 
