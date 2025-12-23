@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { LogOut, Upload, AlertCircle } from "lucide-react";
 import { UploadSection } from "@/components/dashboard/UploadSection";
 import { CallsTable } from "@/components/dashboard/CallsTable";
+import { IncidentChart } from "@/components/dashboard/IncidentChart";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -76,6 +77,7 @@ const Dashboard = () => {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8 space-y-8">
         <UploadSection />
+        <IncidentChart />
         <CallsTable />
       </main>
     </div>
