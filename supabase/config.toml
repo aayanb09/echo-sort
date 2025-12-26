@@ -5,6 +5,3 @@ verify_jwt = false
 
 [functions.analyze-transcript]
 verify_jwt = false
-
-[functions.get-incident-stats]
-verify_jwt = false
