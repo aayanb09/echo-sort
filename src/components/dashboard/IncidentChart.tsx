@@ -34,9 +34,17 @@ export const IncidentChart = () => {
   useEffect(() => {
     const fetchIncidentData = async () => {
       try {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
         const { data: analyses, error } = await supabase
           .from("analyses")
-          .select("incident_type");
+          .select(`
+            incident_type,
+            calls!inner(user_id)
+          `)
+          .eq('calls.user_id', user.id);
 
         if (error) throw error;
 
