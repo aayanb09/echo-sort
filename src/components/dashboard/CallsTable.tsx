@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Activity, Trash2, Download, RefreshCw, HelpCircle } from "lucide-react";
+import { Activity, Trash2, Download, RefreshCw, HelpCircle, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import {
   Dialog,
@@ -139,6 +139,109 @@ export const CallsTable = () => {
       toast.success("Call deleted");
     } catch (error: any) {
       toast.error(error.message || "Failed to delete call");
+    }
+  };
+
+  const reprocessCall = async (callId: string) => {
+    try {
+      // Update call status to processing
+      const { error: updateError } = await supabase
+        .from('calls')
+        .update({ 
+          status: 'processing',
+          processed_at: null
+        })
+        .eq('id', callId);
+
+      if (updateError) throw updateError;
+
+      // Delete existing analyses and transcripts
+      await supabase.from('analyses').delete().eq('call_id', callId);
+      await supabase.from('transcripts').delete().eq('call_id', callId);
+
+      // Get call details
+      const { data: callData, error: fetchError } = await supabase
+        .from('calls')
+        .select('file_path')
+        .eq('id', callId)
+        .single();
+
+      if (fetchError || !callData) throw fetchError || new Error('Call not found');
+
+      // Get signed URL for the file
+      const { data: urlData, error: urlError } = await supabase.storage
+        .from('call-recordings')
+        .createSignedUrl(callData.file_path, 3600);
+
+      if (urlError || !urlData?.signedUrl) throw urlError || new Error('Failed to create signed URL');
+
+      // Re-transcribe
+      const { data: transcribeData, error: transcribeError } = await supabase.functions.invoke('transcribe-audio', {
+        body: { audioUrl: urlData.signedUrl }
+      });
+
+      if (transcribeError) throw transcribeError;
+      if (!transcribeData?.text) throw new Error('No transcription text returned');
+
+      // Save new transcript
+      await supabase.from('transcripts').insert({
+        call_id: callId,
+        transcript_text: transcribeData.text,
+        confidence_score: 90
+      });
+
+      // Re-analyze
+      const { data: analyzeData, error: analyzeError } = await supabase.functions.invoke('analyze-transcript', {
+        body: { transcript: transcribeData.text }
+      });
+
+      if (analyzeError) throw analyzeError;
+      if (!analyzeData?.analysis) throw new Error('No analysis data returned');
+
+      const analysis = analyzeData.analysis;
+
+      // Save new analysis
+      await supabase.from('analyses').insert({
+        call_id: callId,
+        incident_type: analysis.incident_type || 'unknown',
+        urgency_level: analysis.urgency_level || 'medium',
+        urgency_score: analysis.urgency_score || 50,
+        risk_category: analysis.risk_category || 'routine inquiry',
+        anomaly_detected: analysis.anomaly_detected || false,
+        sort_priority: analysis.sort_priority || 50,
+        sentiment: analysis.sentiment || 'neutral',
+        sentiment_score: analysis.sentiment_score || 50,
+        keywords: analysis.keywords || [],
+        topics: analysis.topics || [],
+        emotional_tone: analysis.emotional_tone || 'calm',
+        summary: analysis.summary || '',
+        flagged_terms: analysis.flagged_terms || [],
+        confidence_score: analysis.confidence_score || 50
+      });
+
+      // Update call status to completed
+      await supabase
+        .from('calls')
+        .update({ 
+          status: 'completed',
+          processed_at: new Date().toISOString()
+        })
+        .eq('id', callId);
+
+      toast.success("Call reprocessed successfully");
+    } catch (error: any) {
+      console.error('Reprocess error:', error);
+      
+      // Update call status to failed
+      await supabase
+        .from('calls')
+        .update({ 
+          status: 'failed',
+          processed_at: new Date().toISOString()
+        })
+        .eq('id', callId);
+      
+      toast.error(error.message || "Failed to reprocess call");
     }
   };
 
@@ -379,6 +482,16 @@ export const CallsTable = () => {
                           <Download className="w-4 h-4" />
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => reprocessCall(call.id)}
+                        className="text-orange-600 hover:text-orange-600 hover:bg-orange-50"
+                        title="Reprocess call"
+                        disabled={call.status === 'processing'}
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </Button>
                       <Button
                         size="sm"
                         variant="ghost"
