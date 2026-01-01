@@ -12,6 +12,7 @@ export const UploadSection = () => {
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadKey, setUploadKey] = useState(0);
   const cancelledRef = useRef(false);
 
   const filterAudioFiles = (fileList: File[]) => {
@@ -265,6 +266,7 @@ export const UploadSection = () => {
       setFiles([]);
       setProgress(0);
       setProgressLabel("");
+      setUploadKey(prev => prev + 1); // Reset file input to allow selecting same files again
     } catch (error: any) {
       console.error('Upload error:', error);
       toast.error(error.message || "Upload failed");
@@ -296,6 +298,7 @@ export const UploadSection = () => {
           <input
             type="file"
             id="file-upload"
+            key={uploadKey}
             className="hidden"
             accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
             multiple
