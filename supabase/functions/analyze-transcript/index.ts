@@ -58,7 +58,7 @@ Return ONLY valid JSON with no surrounding text or commentary.`;
         }
 
         response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
           {
             method: 'POST',
             headers: {
@@ -75,7 +75,8 @@ Return ONLY valid JSON with no surrounding text or commentary.`;
                 maxOutputTokens: 2048,
                 responseMimeType: 'application/json',
               }
-            })
+            }),
+            signal: AbortSignal.timeout(30000) // 30 second timeout
           }
         );
 
@@ -91,10 +92,19 @@ Return ONLY valid JSON with no surrounding text or commentary.`;
           continue; // Retry
         }
 
-        // For other errors, don't retry
+        if (response.status >= 500) {
+          // Server errors - retry
+          lastError = `Server error: ${response.status}`;
+          if (attempt === maxRetries - 1) {
+            throw new Error(`Gemini API server error after retries: ${response.status}`);
+          }
+          continue; // Retry
+        }
+
+        // For client errors (4xx except 429), don't retry
         const errorText = await response.text();
         console.error('Gemini API error:', response.status, errorText);
-        throw new Error(`Gemini API error: ${response.status}`);
+        throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
         
       } catch (error) {
         if (attempt === maxRetries - 1) {
@@ -114,6 +124,10 @@ Return ONLY valid JSON with no surrounding text or commentary.`;
     
     console.log('Raw Gemini response:', generatedText);
 
+    if (!generatedText) {
+      throw new Error('Empty response from Gemini API');
+    }
+
     // Parse JSON from response (handle code fences / extra text)
     let raw = String(generatedText ?? '').trim();
     raw = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
@@ -121,17 +135,22 @@ Return ONLY valid JSON with no surrounding text or commentary.`;
     let analysis: Record<string, unknown>;
     try {
       analysis = JSON.parse(raw);
-    } catch {
+    } catch (parseError) {
+      console.error('JSON parse error. Raw response:', raw);
       const start = raw.indexOf('{');
       const end = raw.lastIndexOf('}');
       if (start !== -1 && end !== -1 && end > start) {
-        analysis = JSON.parse(raw.slice(start, end + 1));
+        try {
+          analysis = JSON.parse(raw.slice(start, end + 1));
+        } catch (secondParseError) {
+          throw new Error(`Failed to parse Gemini response as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}`);
+        }
       } else {
-        throw new Error(`No valid JSON found in Gemini response`);
+        throw new Error(`No valid JSON found in Gemini response. Response: ${raw.substring(0, 200)}...`);
       }
     }
     
-    console.log('Analysis complete');
+    console.log('Analysis complete:', Object.keys(analysis));
 
     return new Response(
       JSON.stringify({ analysis }),

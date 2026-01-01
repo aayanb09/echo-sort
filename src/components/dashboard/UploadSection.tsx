@@ -126,14 +126,41 @@ export const UploadSection = () => {
         body: { transcript }
       });
 
-      if (error) throw error;
-      if (!data?.analysis) throw new Error('No analysis data returned');
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw new Error(`Analysis service error: ${error.message || 'Unknown error'}`);
+      }
+      
+      if (!data) {
+        throw new Error('No response data from analysis service');
+      }
+
+      if (data.error) {
+        throw new Error(`Analysis failed: ${data.error}`);
+      }
+
+      if (!data.analysis) {
+        throw new Error('No analysis data returned from service');
+      }
       
       console.log('Analysis complete');
       return data.analysis;
     } catch (error) {
       console.error('Analysis error:', error);
-      throw new Error(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('timeout') || error.message.includes('AbortError')) {
+          throw new Error('Analysis timed out. The service may be busy - please try again.');
+        }
+        if (error.message.includes('rate limit')) {
+          throw new Error('Analysis service is rate limited. Please wait a moment and try again.');
+        }
+        if (error.message.includes('JSON')) {
+          throw new Error('Analysis service returned invalid data. Please try again.');
+        }
+        throw new Error(`Analysis failed: ${error.message}`);
+      }
+      throw new Error('Analysis failed: Unknown error occurred');
     }
   };
 
