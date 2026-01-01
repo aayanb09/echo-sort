@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,7 +13,18 @@ export const UploadSection = () => {
   const [progressLabel, setProgressLabel] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [uploadKey, setUploadKey] = useState(0);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const cancelledRef = useRef(false);
+
+  // Set webkitdirectory property on folder input
+  useEffect(() => {
+    if (folderInputRef.current) {
+      folderInputRef.current.webkitdirectory = true;
+      // Also try the standard directory property
+      (folderInputRef.current as any).directory = true;
+      (folderInputRef.current as any).mozdirectory = true;
+    }
+  }, [uploadKey]); // Re-run when uploadKey changes
 
   const filterAudioFiles = (fileList: File[]) => {
     console.log('Filtering files:', fileList.map(f => ({ name: f.name, type: f.type, size: f.size, webkitRelativePath: (f as any).webkitRelativePath })));
@@ -320,14 +331,12 @@ export const UploadSection = () => {
             disabled={uploading}
           />
           <input
+            ref={folderInputRef}
             type="file"
             id="folder-upload"
             key={`folder-${uploadKey}`}
             className="hidden"
-            accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
             multiple
-            webkitdirectory
-            mozdirectory
             onChange={(e) => {
               console.log('Folder input changed, target:', e.target);
               handleFileChange(e);
@@ -350,12 +359,14 @@ export const UploadSection = () => {
             </p>
           </label>
           <div className="mt-4 flex gap-4 justify-center">
-            <label
-              htmlFor="folder-upload"
-              className={`text-sm font-medium text-primary hover:underline ${uploading ? 'cursor-not-allowed' : 'cursor-pointer'} px-3 py-1 border border-primary rounded-md hover:bg-primary/5`}
+            <button
+              type="button"
+              onClick={() => folderInputRef.current?.click()}
+              className={`text-sm font-medium text-primary hover:underline ${uploading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} px-3 py-1 border border-primary rounded-md hover:bg-primary/5`}
+              disabled={uploading}
             >
               📁 Upload Entire Folder
-            </label>
+            </button>
           </div>
         </div>
 
