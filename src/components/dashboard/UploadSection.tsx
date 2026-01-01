@@ -14,6 +14,19 @@ export const UploadSection = () => {
   const [isDragging, setIsDragging] = useState(false);
   const cancelledRef = useRef(false);
 
+  const filterAudioFiles = (fileList: File[]) => {
+    const audioFiles = fileList.filter(file => 
+      file.type.startsWith('audio/') || 
+      file.name.match(/\.(mp3|wav|m4a|ogg|webm)$/i)
+    );
+
+    if (audioFiles.length !== fileList.length) {
+      toast.error("Some files were not audio files and were filtered out");
+    }
+
+    return audioFiles;
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
     const audioFiles = filterAudioFiles(selectedFiles);
@@ -289,17 +302,6 @@ export const UploadSection = () => {
             onChange={handleFileChange}
             disabled={uploading}
           />
-          <input
-            type="file"
-            id="folder-upload"
-            className="hidden"
-            accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
-            multiple
-            webkitdirectory=""
-            directory=""
-            onChange={handleFileChange}
-            disabled={uploading}
-          />
           <label
             htmlFor="file-upload"
             className={`flex flex-col items-center gap-2 ${uploading ? 'cursor-not-allowed' : 'cursor-pointer'}`}
@@ -307,7 +309,7 @@ export const UploadSection = () => {
             <Upload className={`h-12 w-12 transition-colors ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
             <div className="text-sm">
               <span className="font-medium text-primary hover:underline">
-                Click to upload files
+                Click to upload
               </span>
               {" or drag and drop"}
             </div>
@@ -315,14 +317,6 @@ export const UploadSection = () => {
               MP3, WAV, M4A, OGG, WEBM files
             </p>
           </label>
-          <div className="mt-4 flex gap-4 justify-center">
-            <label
-              htmlFor="folder-upload"
-              className={`text-sm font-medium text-primary hover:underline ${uploading ? 'cursor-not-allowed' : 'cursor-pointer'} px-3 py-1 border border-primary rounded-md hover:bg-primary/5`}
-            >
-              Upload Folder
-            </label>
-          </div>
         </div>
 
         {files.length > 0 && (
