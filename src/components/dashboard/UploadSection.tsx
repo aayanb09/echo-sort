@@ -16,7 +16,7 @@ export const UploadSection = () => {
   const cancelledRef = useRef(false);
 
   const filterAudioFiles = (fileList: File[]) => {
-    console.log('Filtering files:', fileList.map(f => ({ name: f.name, type: f.type, size: f.size })));
+    console.log('Filtering files:', fileList.map(f => ({ name: f.name, type: f.type, size: f.size, webkitRelativePath: (f as any).webkitRelativePath })));
     const audioFiles = fileList.filter(file => {
       const isAudioType = file.type.startsWith('audio/');
       const hasAudioExtension = file.name.match(/\.(mp3|wav|m4a|ogg|webm)$/i);
@@ -29,8 +29,10 @@ export const UploadSection = () => {
       const nonAudioFiles = fileList.filter(file => 
         !(file.type.startsWith('audio/') || file.name.match(/\.(mp3|wav|m4a|ogg|webm)$/i))
       );
-      console.log('Filtered out non-audio files:', nonAudioFiles.map(f => f.name));
-      toast.error(`${fileList.length - audioFiles.length} non-audio files were filtered out`);
+      console.log('Filtered out non-audio files:', nonAudioFiles.map(f => ({ name: f.name, type: f.type })));
+      if (nonAudioFiles.length > 0) {
+        toast.error(`${nonAudioFiles.length} non-audio files were filtered out: ${nonAudioFiles.map(f => f.name).join(', ')}`);
+      }
     }
 
     return audioFiles;
@@ -341,7 +343,7 @@ export const UploadSection = () => {
               <span className="font-medium text-primary hover:underline">
                 Click to upload files
               </span>
-              {" or drag and drop"}
+              {" or drag and drop individual files"}
             </div>
             <p className="text-xs text-muted-foreground">
               MP3, WAV, M4A, OGG, WEBM files
@@ -352,7 +354,7 @@ export const UploadSection = () => {
               htmlFor="folder-upload"
               className={`text-sm font-medium text-primary hover:underline ${uploading ? 'cursor-not-allowed' : 'cursor-pointer'} px-3 py-1 border border-primary rounded-md hover:bg-primary/5`}
             >
-              Upload Folder
+              📁 Upload Entire Folder
             </label>
           </div>
         </div>
