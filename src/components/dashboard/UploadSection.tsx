@@ -16,13 +16,21 @@ export const UploadSection = () => {
   const cancelledRef = useRef(false);
 
   const filterAudioFiles = (fileList: File[]) => {
-    const audioFiles = fileList.filter(file => 
-      file.type.startsWith('audio/') || 
-      file.name.match(/\.(mp3|wav|m4a|ogg|webm)$/i)
-    );
+    console.log('Filtering files:', fileList.map(f => ({ name: f.name, type: f.type, size: f.size })));
+    const audioFiles = fileList.filter(file => {
+      const isAudioType = file.type.startsWith('audio/');
+      const hasAudioExtension = file.name.match(/\.(mp3|wav|m4a|ogg|webm)$/i);
+      const result = isAudioType || hasAudioExtension;
+      console.log(`File ${file.name}: type=${file.type}, extension=${hasAudioExtension}, accepted=${result}`);
+      return result;
+    });
 
     if (audioFiles.length !== fileList.length) {
-      toast.error("Some files were not audio files and were filtered out");
+      const nonAudioFiles = fileList.filter(file => 
+        !(file.type.startsWith('audio/') || file.name.match(/\.(mp3|wav|m4a|ogg|webm)$/i))
+      );
+      console.log('Filtered out non-audio files:', nonAudioFiles.map(f => f.name));
+      toast.error(`${fileList.length - audioFiles.length} non-audio files were filtered out`);
     }
 
     return audioFiles;
@@ -30,7 +38,9 @@ export const UploadSection = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
+    console.log('Files selected:', selectedFiles.length, selectedFiles.map(f => ({ name: f.name, size: f.size, type: f.type })));
     const audioFiles = filterAudioFiles(selectedFiles);
+    console.log('Audio files filtered:', audioFiles.length);
     setFiles(prev => [...prev, ...audioFiles]);
   };
 
@@ -56,7 +66,9 @@ export const UploadSection = () => {
     if (uploading) return;
 
     const droppedFiles = Array.from(e.dataTransfer.files);
+    console.log('Files dropped:', droppedFiles.length, droppedFiles.map(f => ({ name: f.name, size: f.size, type: f.type })));
     const audioFiles = filterAudioFiles(droppedFiles);
+    console.log('Audio files filtered from drop:', audioFiles.length);
     setFiles(prev => [...prev, ...audioFiles]);
   };
 
@@ -305,6 +317,17 @@ export const UploadSection = () => {
             onChange={handleFileChange}
             disabled={uploading}
           />
+          <input
+            type="file"
+            id="folder-upload"
+            key={`folder-${uploadKey}`}
+            className="hidden"
+            accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
+            multiple
+            webkitdirectory
+            onChange={handleFileChange}
+            disabled={uploading}
+          />
           <label
             htmlFor="file-upload"
             className={`flex flex-col items-center gap-2 ${uploading ? 'cursor-not-allowed' : 'cursor-pointer'}`}
@@ -312,7 +335,7 @@ export const UploadSection = () => {
             <Upload className={`h-12 w-12 transition-colors ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
             <div className="text-sm">
               <span className="font-medium text-primary hover:underline">
-                Click to upload
+                Click to upload files
               </span>
               {" or drag and drop"}
             </div>
@@ -320,6 +343,14 @@ export const UploadSection = () => {
               MP3, WAV, M4A, OGG, WEBM files
             </p>
           </label>
+          <div className="mt-4 flex gap-4 justify-center">
+            <label
+              htmlFor="folder-upload"
+              className={`text-sm font-medium text-primary hover:underline ${uploading ? 'cursor-not-allowed' : 'cursor-pointer'} px-3 py-1 border border-primary rounded-md hover:bg-primary/5`}
+            >
+              Upload Folder
+            </label>
+          </div>
         </div>
 
         {files.length > 0 && (
