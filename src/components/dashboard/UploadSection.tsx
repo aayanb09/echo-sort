@@ -325,7 +325,11 @@ export const UploadSection = () => {
             accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
             multiple
             webkitdirectory
-            onChange={handleFileChange}
+            mozdirectory
+            onChange={(e) => {
+              console.log('Folder input changed, target:', e.target);
+              handleFileChange(e);
+            }}
             disabled={uploading}
           />
           <label
