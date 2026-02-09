@@ -35,7 +35,7 @@ const Auth = () => {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -45,8 +45,12 @@ const Auth = () => {
 
         if (error) throw error;
 
-        toast.success("Account created successfully! Logging you in...");
-        navigate("/dashboard");
+        if (data.session) {
+          toast.success("Account created successfully! Logging you in...");
+          navigate("/dashboard");
+        } else {
+          toast.success("Account created. Please check your email to confirm, then sign in.");
+        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -59,7 +63,11 @@ const Auth = () => {
         navigate("/dashboard");
       }
     } catch (error: any) {
-      toast.error(error.message || "Authentication failed");
+      if (error?.message === "Invalid login credentials") {
+        toast.error("Invalid login credentials. If you're sure they're correct, verify you're on the correct Supabase project.");
+      } else {
+        toast.error(error.message || "Authentication failed");
+      }
     } finally {
       setLoading(false);
     }
