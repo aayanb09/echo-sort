@@ -239,10 +239,6 @@ export const CallsTable = () => {
                   <p className="text-muted-foreground">Safety Threat = Potential danger, Emergency Response = Requires dispatch, Routine Inquiry = Standard question, Administrative = Non-urgent matter</p>
                 </div>
                 <div>
-                  <h4 className="font-semibold text-foreground">Anomaly Detection</h4>
-                  <p className="text-muted-foreground">Flags unusual calls that deviate from typical patterns—may warrant extra review</p>
-                </div>
-                <div>
                   <h4 className="font-semibold text-foreground">Confidence Score</h4>
                   <p className="text-muted-foreground">AI's certainty in the analysis. 90%+ = High confidence, 70-89% = Moderate, Below 70% = Review recommended</p>
                 </div>
@@ -280,7 +276,6 @@ export const CallsTable = () => {
                 <th className="pb-3 font-medium text-muted-foreground">Urgency</th>
                 <th className="pb-3 font-medium text-muted-foreground">Risk</th>
                 <th className="pb-3 font-medium text-muted-foreground">Flagged Terms</th>
-                <th className="pb-3 font-medium text-muted-foreground">Anomaly</th>
                 <th className="pb-3 font-medium text-muted-foreground">Priority</th>
                 <th className="pb-3 font-medium text-muted-foreground">Confidence</th>
                 <th className="pb-3 font-medium text-muted-foreground">Uploaded</th>
@@ -334,17 +329,6 @@ export const CallsTable = () => {
                       <span className="text-sm">
                         {call.analyses[0].flagged_terms?.slice(0, 3).join(', ') || '-'}
                       </span>
-                    ) : (
-                      <span className="text-muted-foreground">-</span>
-                    )}
-                  </td>
-                  <td className="py-3 text-foreground">
-                    {call.analyses && call.analyses.length > 0 ? (
-                      call.analyses[0].anomaly_detected ? (
-                        <Badge variant="destructive">Anomalous</Badge>
-                      ) : (
-                        <Badge variant="secondary">Normal</Badge>
-                      )
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
