@@ -2,6 +2,14 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { BarChart3, Clock3, Users, MapPinned } from "lucide-react";
 import {
   BarChart,
@@ -68,6 +76,12 @@ interface AnalyticsRow {
     processed_at: string | null;
     filename: string;
   };
+}
+
+interface UnassignedCall {
+  callId: string;
+  filename: string;
+  incidentType: string;
 }
 
 const COLORS = [
@@ -144,6 +158,8 @@ const getWorkloadScore = (row: AnalyticsRow) => {
   return base * (urgencyMultiplier[urgency] || urgencyMultiplier.medium) + riskBoost + anomalyBoost;
 };
 
+const BEAT_ASSIGNMENT_STORAGE_KEY = "cobra-manual-beat-assignments";
+
 export const IncidentChart = () => {
   const [incidentData, setIncidentData] = useState<IncidentData[]>([]);
   const [urgencyData, setUrgencyData] = useState<UrgencyData[]>([]);
@@ -157,7 +173,22 @@ export const IncidentChart = () => {
   const [dayStaffingShare, setDayStaffingShare] = useState(50);
   const [nightStaffingShare, setNightStaffingShare] = useState(50);
   const [imbalanceIndex, setImbalanceIndex] = useState(0);
+  const [manualBeatAssignments, setManualBeatAssignments] = useState<Record<string, number>>({});
+  const [unassignedCalls, setUnassignedCalls] = useState<UnassignedCall[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(BEAT_ASSIGNMENT_STORAGE_KEY);
+      if (!stored) return;
+      const parsed = JSON.parse(stored) as Record<string, number>;
+      if (parsed && typeof parsed === "object") {
+        setManualBeatAssignments(parsed);
+      }
+    } catch (error) {
+      console.error("Failed to load manual beat assignments:", error);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchIncidentData = async () => {
@@ -236,6 +267,7 @@ export const IncidentChart = () => {
         let dayWorkload = 0;
         let nightWorkload = 0;
         let unassignedCount = 0;
+        const unassignedList: UnassignedCall[] = [];
 
         rows.forEach((row) => {
           const type = row.incident_type || "unknown";
@@ -267,7 +299,7 @@ export const IncidentChart = () => {
           hourRollup[uploadedHour].calls += 1;
           hourRollup[uploadedHour].priorityTotal += priority;
 
-          const beatNumber = extractBeatNumber(row);
+          const beatNumber = manualBeatAssignments[row.calls.id] ?? extractBeatNumber(row);
           if (beatNumber && beatNumber >= 1 && beatNumber <= 8) {
             const beat = beatRollup[beatNumber - 1];
             beat.calls += 1;
@@ -276,6 +308,11 @@ export const IncidentChart = () => {
             if (shift === "Night Shift") beat.nightCalls += 1;
           } else {
             unassignedCount += 1;
+            unassignedList.push({
+              callId: row.calls.id,
+              filename: row.calls.filename,
+              incidentType: toTitleCase(row.incident_type || "unknown"),
+            });
           }
         });
 
@@ -334,6 +371,7 @@ export const IncidentChart = () => {
         setDayStaffingShare(dayShare);
         setNightStaffingShare(nightShare);
         setImbalanceIndex(Number(coeffVariation.toFixed(1)));
+        setUnassignedCalls(unassignedList);
       } catch (error) {
         console.error("Error fetching incident data:", error);
       } finally {
@@ -373,7 +411,20 @@ export const IncidentChart = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [manualBeatAssignments]);
+
+  const assignBeatToCall = (callId: string, beat: number | null) => {
+    setManualBeatAssignments((prev) => {
+      const next = { ...prev };
+      if (beat === null) {
+        delete next[callId];
+      } else {
+        next[callId] = beat;
+      }
+      localStorage.setItem(BEAT_ASSIGNMENT_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
 
   if (loading) {
     return (
@@ -606,7 +657,65 @@ export const IncidentChart = () => {
       <Card className="p-4 border-border bg-background/40 mt-6">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h3 className="text-base font-semibold text-foreground">Beat Workload & Shift Distribution</h3>
-          <Badge variant="outline">Calls without beat marker: {unassignedBeatCalls}</Badge>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm" className="h-auto py-1 px-2">
+                <Badge variant="outline" className="cursor-pointer">
+                  Calls without beat marker: {unassignedBeatCalls}
+                </Badge>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Assign Calls to Beats</DialogTitle>
+              </DialogHeader>
+              {unassignedCalls.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  All calls already have a beat marker or manual assignment.
+                </p>
+              ) : (
+                <div className="max-h-[60vh] overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left">
+                        <th className="py-2 pr-2 text-muted-foreground font-medium">Filename</th>
+                        <th className="py-2 pr-2 text-muted-foreground font-medium">Incident</th>
+                        <th className="py-2 text-muted-foreground font-medium">Assign Beat</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {unassignedCalls.map((call) => (
+                        <tr key={call.callId} className="border-b border-border/60">
+                          <td className="py-2 pr-2 text-foreground">{call.filename}</td>
+                          <td className="py-2 pr-2 text-muted-foreground">{call.incidentType}</td>
+                          <td className="py-2">
+                            <select
+                              className="bg-background border border-border rounded-md px-2 py-1 text-foreground"
+                              defaultValue=""
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                assignBeatToCall(call.callId, value ? Number(value) : null);
+                              }}
+                            >
+                              <option value="">Select Beat</option>
+                              <option value="1">Beat 1</option>
+                              <option value="2">Beat 2</option>
+                              <option value="3">Beat 3</option>
+                              <option value="4">Beat 4</option>
+                              <option value="5">Beat 5</option>
+                              <option value="6">Beat 6</option>
+                              <option value="7">Beat 7</option>
+                              <option value="8">Beat 8</option>
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
