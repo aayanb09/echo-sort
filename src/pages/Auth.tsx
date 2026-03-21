@@ -1,12 +1,19 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  getSupabaseClient,
+  isSupabaseConfigured,
+  missingSupabaseConfigMessage,
+} from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Shield, Lock } from "lucide-react";
+
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -16,7 +23,12 @@ const Auth = () => {
   const [password, setPassword] = useState("");
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
     const checkSession = async () => {
+      const supabase = getSupabaseClient();
       const { data: { session } } = await supabase.auth.getSession();
       if (session) navigate("/dashboard");
     };
@@ -34,6 +46,8 @@ const Auth = () => {
     setLoading(true);
 
     try {
+      const supabase = getSupabaseClient();
+
       if (isSignUp) {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -62,11 +76,11 @@ const Auth = () => {
         toast.success("Logged in successfully");
         navigate("/dashboard");
       }
-    } catch (error: any) {
-      if (error?.message === "Invalid login credentials") {
+    } catch (error) {
+      if (getErrorMessage(error, "") === "Invalid login credentials") {
         toast.error("Invalid login credentials. If you're sure they're correct, verify you're on the correct Supabase project.");
       } else {
-        toast.error(error.message || "Authentication failed");
+        toast.error(getErrorMessage(error, "Authentication failed"));
       }
     } finally {
       setLoading(false);
@@ -90,6 +104,11 @@ const Auth = () => {
 
         <Card className="p-6 bg-card border-border">
           <form onSubmit={handleAuth} className="space-y-4">
+            {!isSupabaseConfigured && (
+              <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {missingSupabaseConfigMessage}
+              </p>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-foreground">Email</Label>
               <Input
@@ -99,6 +118,7 @@ const Auth = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="bg-background border-border text-foreground"
+                disabled={!isSupabaseConfigured}
                 required
               />
             </div>
@@ -112,6 +132,7 @@ const Auth = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="bg-background border-border text-foreground"
+                disabled={!isSupabaseConfigured}
                 required
               />
             </div>
@@ -119,7 +140,7 @@ const Auth = () => {
             <Button
               type="submit"
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-              disabled={loading}
+              disabled={loading || !isSupabaseConfigured}
             >
               <Lock className="w-4 h-4 mr-2" />
               {loading ? "Processing..." : isSignUp ? "Create Account" : "Sign In"}
@@ -130,6 +151,7 @@ const Auth = () => {
                 type="button"
                 onClick={() => setIsSignUp(!isSignUp)}
                 className="text-primary hover:underline"
+                disabled={!isSupabaseConfigured}
               >
                 {isSignUp
                   ? "Already have an account? Sign in"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getSupabaseClient } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -191,6 +191,7 @@ export const IncidentChart = () => {
   }, []);
 
   useEffect(() => {
+    const supabase = getSupabaseClient();
     const fetchIncidentData = async () => {
       try {
         // Get current user

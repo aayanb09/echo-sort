@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getSupabaseClient } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ interface Transcript {
 interface Call {
   id: string;
   filename: string;
+  file_path: string;
   status: string;
   uploaded_at: string;
   processed_at: string | null;
@@ -45,17 +46,22 @@ interface Call {
   transcripts?: Transcript[];
 }
 
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
 export const CallsTable = () => {
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchCalls = async () => {
     try {
+      const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from('calls')
         .select(`
           id,
           filename,
+          file_path,
           status,
           uploaded_at,
           processed_at,
@@ -83,7 +89,7 @@ export const CallsTable = () => {
 
       if (error) throw error;
       setCalls(data || []);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error fetching calls:', error);
       toast.error("Failed to load calls");
     } finally {
@@ -92,6 +98,7 @@ export const CallsTable = () => {
   };
 
   useEffect(() => {
+    const supabase = getSupabaseClient();
     fetchCalls();
 
     // Set up realtime subscriptions for both calls and analyses
@@ -130,6 +137,17 @@ export const CallsTable = () => {
 
   const deleteCall = async (callId: string) => {
     try {
+      const supabase = getSupabaseClient();
+      const call = calls.find((entry) => entry.id === callId);
+
+      if (call?.file_path) {
+        const { error: storageError } = await supabase.storage
+          .from('call-recordings')
+          .remove([call.file_path]);
+
+        if (storageError) throw storageError;
+      }
+
       const { error } = await supabase
         .from('calls')
         .delete()
@@ -137,8 +155,8 @@ export const CallsTable = () => {
 
       if (error) throw error;
       toast.success("Call deleted");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to delete call");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to delete call"));
     }
   };
 

@@ -1,6 +1,10 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  getSupabaseClient,
+  isSupabaseConfigured,
+  missingSupabaseConfigMessage,
+} from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Shield, Radio, Lock, AlertTriangle } from "lucide-react";
 
@@ -8,7 +12,12 @@ const Index = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      return;
+    }
+
     const checkAuth = async () => {
+      const supabase = getSupabaseClient();
       const { data: { session } } = await supabase.auth.getSession();
       if (session) navigate("/dashboard");
     };
@@ -89,12 +98,15 @@ const Index = () => {
               onClick={() => navigate("/auth")}
               size="lg"
               className="bg-primary hover:bg-primary/90 text-primary-foreground text-lg px-8 py-6"
+              disabled={!isSupabaseConfigured}
             >
               <Shield className="w-5 h-5 mr-2" />
               Access Platform
             </Button>
             <p className="text-sm text-muted-foreground">
-              Authorized personnel only • All access monitored
+              {isSupabaseConfigured
+                ? "Authorized personnel only • All access monitored"
+                : missingSupabaseConfigMessage}
             </p>
           </div>
         </div>

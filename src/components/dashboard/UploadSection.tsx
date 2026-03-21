@@ -1,10 +1,39 @@
 import { useState, useRef, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getSupabaseClient } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Upload, FileAudio, X, Square } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+
+type DirectoryCapableInput = HTMLInputElement & {
+  directory?: boolean;
+  mozdirectory?: boolean;
+};
+
+type FileWithRelativePath = File & {
+  webkitRelativePath?: string;
+};
+
+type AnalysisResult = {
+  incident_type?: string;
+  urgency_level?: string;
+  urgency_score?: number;
+  risk_category?: string;
+  anomaly_detected?: boolean;
+  sort_priority?: number;
+  sentiment?: string;
+  sentiment_score?: number;
+  keywords?: string[];
+  topics?: string[];
+  emotional_tone?: string;
+  summary?: string;
+  flagged_terms?: string[];
+  confidence_score?: number;
+};
+
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
 
 export const UploadSection = () => {
   const [files, setFiles] = useState<File[]>([]);
@@ -19,15 +48,24 @@ export const UploadSection = () => {
   // Set webkitdirectory property on folder input
   useEffect(() => {
     if (folderInputRef.current) {
-      folderInputRef.current.webkitdirectory = true;
+      folderInputRef.current.setAttribute("webkitdirectory", "");
+      const directoryInput = folderInputRef.current as DirectoryCapableInput;
       // Also try the standard directory property
-      (folderInputRef.current as any).directory = true;
-      (folderInputRef.current as any).mozdirectory = true;
+      directoryInput.directory = true;
+      directoryInput.mozdirectory = true;
     }
   }, [uploadKey]); // Re-run when uploadKey changes
 
   const filterAudioFiles = (fileList: File[]) => {
-    console.log('Filtering files:', fileList.map(f => ({ name: f.name, type: f.type, size: f.size, webkitRelativePath: (f as any).webkitRelativePath })));
+    console.log('Filtering files:', fileList.map((file) => {
+      const fileWithRelativePath = file as FileWithRelativePath;
+      return {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        webkitRelativePath: fileWithRelativePath.webkitRelativePath,
+      };
+    }));
     const audioFiles = fileList.filter(file => {
       const isAudioType = file.type.startsWith('audio/');
       const hasAudioExtension = file.name.match(/\.(mp3|wav|m4a|ogg|webm)$/i);
@@ -93,6 +131,7 @@ export const UploadSection = () => {
     console.log('Starting transcription for:', audioFile.name);
     
     try {
+      const supabase = getSupabaseClient();
       // Get signed URL for the uploaded file (valid for 1 hour)
       const { data: urlData, error: urlError } = await supabase.storage
         .from('call-recordings')
@@ -121,6 +160,7 @@ export const UploadSection = () => {
   const analyzeTranscript = async (transcript: string) => {
     console.log('Starting analysis...');
     try {
+      const supabase = getSupabaseClient();
       console.log('Calling analysis edge function...');
       const { data, error } = await supabase.functions.invoke('analyze-transcript', {
         body: { transcript }
@@ -154,6 +194,7 @@ export const UploadSection = () => {
     setProgress(0);
 
     try {
+      const supabase = getSupabaseClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
@@ -230,7 +271,7 @@ export const UploadSection = () => {
             setProgressLabel(`Analyzing ${file.name}...`);
             setProgress(baseProgress + stageWeight * 2.5);
             
-            const analysis = await analyzeTranscript(transcript);
+            const analysis = (await analyzeTranscript(transcript)) as AnalysisResult;
             console.log('Analysis:', analysis);
 
             // Save analysis
@@ -252,35 +293,39 @@ export const UploadSection = () => {
               confidence_score: analysis.confidence_score || 50
             });
 
-            // Update call status to completed
-            await supabase
+          // Update call status to completed
+          const { error: updateError } = await supabase
               .from('calls')
               .update({ 
                 status: 'completed',
                 processed_at: new Date().toISOString()
               })
               .eq('id', callId);
+          if (updateError) throw updateError;
 
-            completed++;
+          completed++;
             setProgress(completed * progressPerFile);
             toast.success(`Processed ${file.name}`);
-          } catch (processingError: any) {
+          } catch (processingError) {
             console.error(`Processing error for ${file.name}:`, processingError);
             
             // Update call status to failed
-            await supabase
+            const { error: failedUpdateError } = await supabase
               .from('calls')
               .update({ 
                 status: 'failed',
                 processed_at: new Date().toISOString()
               })
               .eq('id', callId);
+            if (failedUpdateError) {
+              console.error(`Failed to mark ${file.name} as failed:`, failedUpdateError);
+            }
               
-            toast.error(`Failed to process ${file.name}: ${processingError.message}`);
+            toast.error(`Failed to process ${file.name}: ${getErrorMessage(processingError, "Processing failed")}`);
           }
-        } catch (fileError: any) {
+        } catch (fileError) {
           console.error(`Error with ${file.name}:`, fileError);
-          toast.error(`Failed to upload ${file.name}: ${fileError.message}`);
+          toast.error(`Failed to upload ${file.name}: ${getErrorMessage(fileError, "Upload failed")}`);
         }
       }
 
@@ -292,9 +337,9 @@ export const UploadSection = () => {
       setProgress(0);
       setProgressLabel("");
       setUploadKey(prev => prev + 1); // Reset file input to allow selecting same files again
-    } catch (error: any) {
+    } catch (error) {
       console.error('Upload error:', error);
-      toast.error(error.message || "Upload failed");
+      toast.error(getErrorMessage(error, "Upload failed"));
     } finally {
       setUploading(false);
     }

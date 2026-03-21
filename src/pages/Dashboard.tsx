@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { User, Session } from "@supabase/supabase-js";
+import {
+  getSupabaseClient,
+  isSupabaseConfigured,
+  missingSupabaseConfigMessage,
+} from "@/integrations/supabase/client";
+import { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { LogOut, Upload, AlertCircle } from "lucide-react";
@@ -12,20 +16,23 @@ import { IncidentChart } from "@/components/dashboard/IncidentChart";
 const Dashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+
+    const supabase = getSupabaseClient();
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
+      (_event, session) => {
         setUser(session?.user ?? null);
         if (!session) navigate("/auth");
       }
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
       setUser(session?.user ?? null);
       if (!session) navigate("/auth");
       setLoading(false);
@@ -35,6 +42,7 @@ const Dashboard = () => {
   }, [navigate]);
 
   const handleLogout = async () => {
+    const supabase = getSupabaseClient();
     await supabase.auth.signOut();
     toast.success("Logged out successfully");
     navigate("/auth");
@@ -44,6 +52,17 @@ const Dashboard = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-primary">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="max-w-lg rounded-lg border border-border bg-card p-6 text-center">
+          <h1 className="text-2xl font-bold text-foreground">Supabase Configuration Required</h1>
+          <p className="mt-3 text-sm text-muted-foreground">{missingSupabaseConfigMessage}</p>
+        </div>
       </div>
     );
   }
