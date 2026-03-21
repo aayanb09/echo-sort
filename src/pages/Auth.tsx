@@ -15,6 +15,8 @@ import { Shield, Lock } from "lucide-react";
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
+const AUTH_REDIRECT_URL = "https://cobracalls.org/auth";
+
 const hasAuthCallbackParams = () => {
   if (typeof window === "undefined") {
     return false;
@@ -90,7 +92,7 @@ const Auth = () => {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth`,
+            emailRedirectTo: AUTH_REDIRECT_URL,
           },
         });
 
