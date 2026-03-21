@@ -304,8 +304,7 @@ export const UploadSection = () => {
           if (updateError) throw updateError;
 
           completed++;
-            setProgress(completed * progressPerFile);
-            toast.success(`Processed ${file.name}`);
+          setProgress(completed * progressPerFile);
           } catch (processingError) {
             console.error(`Processing error for ${file.name}:`, processingError);
             
