@@ -15,9 +15,27 @@ import { Shield, Lock } from "lucide-react";
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
+const hasAuthCallbackParams = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+  return (
+    searchParams.has("code") ||
+    searchParams.has("token_hash") ||
+    hashParams.has("access_token") ||
+    hashParams.has("refresh_token") ||
+    hashParams.has("type")
+  );
+};
+
 const Auth = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [isCompletingAuth, setIsCompletingAuth] = useState(() => hasAuthCallbackParams());
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,9 +48,28 @@ const Auth = () => {
     const checkSession = async () => {
       const supabase = getSupabaseClient();
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) navigate("/dashboard");
+      if (session) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        setIsCompletingAuth(false);
+      }
     };
+
+    const supabase = getSupabaseClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        navigate("/dashboard", { replace: true });
+        return;
+      }
+
+      if (event !== "SIGNED_OUT") {
+        setIsCompletingAuth(false);
+      }
+    });
+
     checkSession();
+
+    return () => subscription.unsubscribe();
   }, [navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -53,17 +90,19 @@ const Auth = () => {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`
-          }
+            emailRedirectTo: `${window.location.origin}/auth`,
+          },
         });
 
         if (error) throw error;
 
         if (data.session) {
-          toast.success("Account created successfully! Logging you in...");
-          navigate("/dashboard");
+          toast.success("Account created successfully. Logging you in...");
+          navigate("/dashboard", { replace: true });
         } else {
-          toast.success("Account created. Please check your email to confirm, then sign in.");
+          toast.success(
+            "Account created. If email confirmation is enabled, check your inbox. Otherwise, sign in now."
+          );
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -74,13 +113,17 @@ const Auth = () => {
         if (error) throw error;
 
         toast.success("Logged in successfully");
-        navigate("/dashboard");
+        setIsCompletingAuth(true);
       }
     } catch (error) {
-      if (getErrorMessage(error, "") === "Invalid login credentials") {
+      const errorMessage = getErrorMessage(error, "Authentication failed");
+
+      if (errorMessage === "Invalid login credentials") {
         toast.error("Invalid login credentials. If you're sure they're correct, verify you're on the correct Supabase project.");
+      } else if (errorMessage === "Email not confirmed") {
+        toast.error("Email not confirmed. If confirmation is enabled in Supabase, use the link in your inbox first.");
       } else {
-        toast.error(getErrorMessage(error, "Authentication failed"));
+        toast.error(errorMessage);
       }
     } finally {
       setLoading(false);
@@ -140,10 +183,14 @@ const Auth = () => {
             <Button
               type="submit"
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-              disabled={loading || !isSupabaseConfigured}
+              disabled={loading || isCompletingAuth || !isSupabaseConfigured}
             >
               <Lock className="w-4 h-4 mr-2" />
-              {loading ? "Processing..." : isSignUp ? "Create Account" : "Sign In"}
+              {loading || isCompletingAuth
+                ? "Processing..."
+                : isSignUp
+                  ? "Create Account"
+                  : "Sign In"}
             </Button>
 
             <div className="text-center text-sm">
@@ -151,13 +198,19 @@ const Auth = () => {
                 type="button"
                 onClick={() => setIsSignUp(!isSignUp)}
                 className="text-primary hover:underline"
-                disabled={!isSupabaseConfigured}
+                disabled={isCompletingAuth || !isSupabaseConfigured}
               >
                 {isSignUp
                   ? "Already have an account? Sign in"
                   : "Need an account? Sign up"}
               </button>
             </div>
+
+            {isCompletingAuth && (
+              <p className="text-center text-sm text-muted-foreground">
+                Finalizing your session...
+              </p>
+            )}
           </form>
         </Card>
 
